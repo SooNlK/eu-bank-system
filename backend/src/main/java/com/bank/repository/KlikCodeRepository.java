@@ -7,6 +7,6 @@ import org.springframework.stereotype.Repository;
 import java.util.UUID;
 
 @Repository
-public interface BlikCodeRepository extends JpaRepository<KlikCode, UUID> {
+public interface KlikCodeRepository extends JpaRepository<KlikCode, UUID> {
     
 }
