@@ -41,7 +41,7 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable()) // Wyłączenie CSRF dla API
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)) // Brak sesji (JWT)
             .authorizeHttpRequests(authz -> authz
-                .requestMatchers("/auth/**").permitAll() // Biała lista dla auth
+                .requestMatchers("/api/auth/**").permitAll() // Biała lista dla auth
                 .anyRequest().authenticated() // Wszystkie inne żądania wymagają logowania
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class); // Dodanie filtru JWT
