@@ -10,6 +10,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import com.bank.domain.shared.Money;
+
 @Entity
 @Table(name = "cards")
 @Getter
@@ -49,9 +51,17 @@ public class Card {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    @Column(name = "daily_limit", precision = 19, scale = 4)
-    private BigDecimal dailyLimit;
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "amount", column = @Column(name = "daily_limit", precision = 19, scale = 4)),
+            @AttributeOverride(name = "currency", column = @Column(name = "currency", nullable = false, length = 3))
+    })
+    private Money dailyLimit;
 
-    @Column(name = "monthly_limit", precision = 19, scale = 4)
-    private BigDecimal monthlyLimit;
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "amount", column = @Column(name = "monthly_limit", precision = 19, scale = 4)),
+            @AttributeOverride(name = "currency", column = @Column(name = "currency", insertable = false, updatable = false))
+    })
+    private Money monthlyLimit;
 }

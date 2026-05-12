@@ -9,6 +9,9 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import com.bank.domain.shared.AccountNumber;
+import com.bank.domain.shared.Money;
+
 @Entity
 @Table(name = "accounts")
 @Getter
@@ -31,21 +34,29 @@ public class Account {
     @JoinColumn(name = "parent_account_id")
     private Account parentAccount;
 
-    @Column(name = "account_number", unique = true, nullable = false, length = 34)
-    private String accountNumber;
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "value", column = @Column(name = "account_number", unique = true, nullable = false, length = 34))
+    })
+    private AccountNumber accountNumber;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private AccountType type = AccountType.STANDARD;
 
-    @Column(nullable = false, precision = 19, scale = 4)
-    private BigDecimal balance = BigDecimal.ZERO;
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "amount", column = @Column(name = "balance", nullable = false, precision = 19, scale = 4)),
+            @AttributeOverride(name = "currency", column = @Column(name = "currency", nullable = false, length = 3))
+    })
+    private Money balance;
 
-    @Column(name = "reserved_balance", nullable = false, precision = 19, scale = 4)
-    private BigDecimal reservedBalance = BigDecimal.ZERO;
-
-    @Column(nullable = false, length = 3)
-    private String currency = "EUR";
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "amount", column = @Column(name = "reserved_balance", nullable = false, precision = 19, scale = 4)),
+            @AttributeOverride(name = "currency", column = @Column(name = "currency", insertable = false, updatable = false))
+    })
+    private Money reservedBalance;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
