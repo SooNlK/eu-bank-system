@@ -8,6 +8,7 @@ const TRANSFER_ITEMS = [
     { id: 'sepa', label: 'SEPA', icon: GlobeIcon },
     { id: 'instant', label: 'SEPA Instant', icon: BoltIcon },
     { id: 'target', label: 'TARGET2', icon: GridIcon },
+    { id: 'internal', label: 'Przelew wewnętrzny', icon: InternalIcon },
 ]
 
 export default function Sidebar({ activeNav, onNavChange }) {
@@ -136,6 +137,14 @@ function GridIcon({ size = 16, color = 'currentColor' }) {
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
             <rect x="3" y="3" width="18" height="18" rx="2" stroke={color} strokeWidth="1.8" />
             <path d="M3 9h18M9 21V9" stroke={color} strokeWidth="1.8" />
+        </svg>
+    )
+}
+function InternalIcon({ size = 16, color = 'currentColor' }) {
+    return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+            <path d="M7 16V4m0 0L3 8m4-4l4 4" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M17 8v12m0 0l4-4m-4 4l-4-4" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
     )
 }

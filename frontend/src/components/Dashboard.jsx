@@ -4,6 +4,7 @@ import TopBar from './TopBar'
 import BalanceCard from './BalanceCard'
 import QuickActions from './QuickActions'
 import TransferPanel from './TransferPanel'
+import InternalTransferPanel from './InternalTransferPanel'
 import TransactionList from './TransactionList'
 
 export default function Dashboard() {
@@ -11,7 +12,7 @@ export default function Dashboard() {
     const [showTransfer, setShowTransfer] = useState(false)
     const [transferType, setTransferType] = useState('sepa')
 
-    const TRANSFER_NAV_IDS = ['sepa', 'instant', 'target']
+    const TRANSFER_NAV_IDS = ['sepa', 'instant', 'target', 'internal']
 
     const handleNavChange = (id) => {
         setActiveNav(id)
@@ -39,13 +40,22 @@ export default function Dashboard() {
                     </div>
 
                     {showTransfer && (
-                        <TransferPanel
-                            initialType={transferType}
-                            onClose={() => {
-                                setShowTransfer(false)
-                                setActiveNav('dashboard')
-                            }}
-                        />
+                        transferType === 'internal' ? (
+                            <InternalTransferPanel
+                                onClose={() => {
+                                    setShowTransfer(false)
+                                    setActiveNav('dashboard')
+                                }}
+                            />
+                        ) : (
+                            <TransferPanel
+                                initialType={transferType}
+                                onClose={() => {
+                                    setShowTransfer(false)
+                                    setActiveNav('dashboard')
+                                }}
+                            />
+                        )
                     )}
 
                     <div className="grid grid-cols-2 gap-4">
