@@ -11,7 +11,11 @@ const TRANSFER_ITEMS = [
     { id: 'internal', label: 'Przelew wewnętrzny', icon: InternalIcon },
 ]
 
+const TRANSFER_IDS = ['sepa', 'instant', 'target', 'internal', 'transfers']
+
 export default function Sidebar({ activeNav, onNavChange }) {
+    const isTransfersActive = TRANSFER_IDS.includes(activeNav)
+
     return (
         <aside className="flex flex-col" style={{ background: '#1a3c8f' }}>
 
@@ -29,20 +33,25 @@ export default function Sidebar({ activeNav, onNavChange }) {
                 <p className="text-white/30 text-[10px] tracking-[0.08em] uppercase px-3 pb-1.5 pt-2">
                     Menu
                 </p>
-                {NAV_ITEMS.map(item => (
-                    <button
-                        key={item.id}
-                        onClick={() => onNavChange(item.id)}
-                        className={`flex items-center gap-2.5 w-full px-3 py-2.5 rounded-[10px] mb-0.5 text-[13px] font-medium text-left border-none transition-colors duration-150 cursor-pointer
-                            ${activeNav === item.id
-                                ? 'bg-white/15 text-white'
-                                : 'bg-transparent text-white/60 hover:bg-white/[0.08] hover:text-white/85'
-                            }`}
-                    >
-                        <item.icon size={16} color="currentColor" />
-                        {item.label}
-                    </button>
-                ))}
+                {NAV_ITEMS.map(item => {
+                    const isActive = item.id === 'transfers'
+                        ? isTransfersActive
+                        : activeNav === item.id
+                    return (
+                        <button
+                            key={item.id}
+                            onClick={() => onNavChange(item.id)}
+                            className={`flex items-center gap-2.5 w-full px-3 py-2.5 rounded-[10px] mb-0.5 text-[13px] font-medium text-left border-none transition-colors duration-150 cursor-pointer
+                                ${isActive
+                                    ? 'bg-white/15 text-white'
+                                    : 'bg-transparent text-white/60 hover:bg-white/[0.08] hover:text-white/85'
+                                }`}
+                        >
+                            <item.icon size={16} color="currentColor" />
+                            {item.label}
+                        </button>
+                    )
+                })}
 
                 <p className="text-white/30 text-[10px] tracking-[0.08em] uppercase px-3 pb-1.5 pt-2 mt-4">
                     Transfery
