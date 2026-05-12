@@ -11,6 +11,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 import com.bank.domain.shared.Money;
+import org.springframework.data.domain.AbstractAggregateRoot;
 
 @Entity
 @Table(name = "transfers")
@@ -19,7 +20,7 @@ import com.bank.domain.shared.Money;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Transfer {
+public class Transfer extends AbstractAggregateRoot<Transfer> {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

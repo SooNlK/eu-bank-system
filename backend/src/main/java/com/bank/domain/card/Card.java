@@ -11,6 +11,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 import com.bank.domain.shared.Money;
+import org.springframework.data.domain.AbstractAggregateRoot;
 
 @Entity
 @Table(name = "cards")
@@ -19,7 +20,7 @@ import com.bank.domain.shared.Money;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Card {
+public class Card extends AbstractAggregateRoot<Card> {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
