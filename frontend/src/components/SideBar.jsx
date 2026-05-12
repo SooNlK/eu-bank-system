@@ -13,8 +13,11 @@ const TRANSFER_ITEMS = [
 
 const TRANSFER_IDS = ['sepa', 'instant', 'target', 'internal', 'transfers']
 
-export default function Sidebar({ activeNav, onNavChange }) {
+export default function Sidebar({ activeNav, onNavChange, userEmail }) {
     const isTransfersActive = TRANSFER_IDS.includes(activeNav)
+
+    const displayName = getDisplayName(userEmail)
+    const initials = getInitials(userEmail)
 
     return (
         <aside className="flex flex-col" style={{ background: '#1a3c8f' }}>
@@ -74,17 +77,34 @@ export default function Sidebar({ activeNav, onNavChange }) {
 
             <div className="flex items-center gap-2.5 px-3 py-4 border-t border-white/10">
                 <div className="w-[34px] h-[34px] bg-blue-600 rounded-full flex items-center justify-center text-[12px] font-medium text-white shrink-0">
-                    AK
+                    {initials}
                 </div>
                 <div>
-                    <p className="text-white text-[12px] font-medium">Anna Kowalska</p>
-                    <p className="text-white/40 text-[11px]">Premium</p>
+                    <p className="text-white text-[12px] font-medium">{displayName}</p>
+                    <p className="text-white/40 text-[11px] truncate max-w-[130px]">{userEmail}</p>
                 </div>
                 <div className="ml-auto w-2 h-2 bg-green-400 rounded-full" />
             </div>
 
         </aside>
     )
+}
+
+function getDisplayName(email = "") {
+    const namePart = email.split("@")[0] || "Klient"
+    return namePart
+        .split(/[._-]/)
+        .filter(Boolean)
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(" ") || "Klient"
+}
+
+function getInitials(email = "") {
+    const parts = (email.split("@")[0] || "KB").split(/[._-]/).filter(Boolean)
+    return parts
+        .slice(0, 2)
+        .map(part => part.charAt(0).toUpperCase())
+        .join("")
 }
 
 function HomeIcon({ size = 16, color = 'currentColor' }) {

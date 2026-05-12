@@ -7,7 +7,7 @@ import TransfersPanel from './TransfersPanel'
 
 const TRANSFER_NAV_IDS = ['sepa', 'instant', 'target', 'internal', 'transfers']
 
-export default function Dashboard() {
+export default function Dashboard({ userEmail, onLogout }) {
     const [activeNav, setActiveNav] = useState('dashboard')
 
     const handleNavChange = (id) => {
@@ -42,10 +42,10 @@ export default function Dashboard() {
     return (
         <div className="grid h-screen w-screen grid-cols-[220px_1fr] rounded-none overflow-hidden border border-slate-200/80 bg-[#f0f4ff]">
 
-            <Sidebar activeNav={activeNav} onNavChange={handleNavChange} />
+            <Sidebar activeNav={activeNav} onNavChange={handleNavChange} userEmail={userEmail} />
 
             <div className="flex flex-col overflow-hidden">
-                <TopBar />
+                <TopBar userEmail={userEmail} onLogout={onLogout} />
 
                 <div className="flex-1 overflow-y-auto px-6 py-5">
                     {renderContent()}
