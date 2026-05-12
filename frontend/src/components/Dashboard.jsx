@@ -9,11 +9,24 @@ import TransactionList from './TransactionList'
 export default function Dashboard() {
     const [activeNav, setActiveNav] = useState('dashboard')
     const [showTransfer, setShowTransfer] = useState(false)
+    const [transferType, setTransferType] = useState('sepa')
+
+    const TRANSFER_NAV_IDS = ['sepa', 'instant', 'target']
+
+    const handleNavChange = (id) => {
+        setActiveNav(id)
+        if (TRANSFER_NAV_IDS.includes(id)) {
+            setTransferType(id)
+            setShowTransfer(true)
+        } else {
+            setShowTransfer(false)
+        }
+    }
 
     return (
         <div className="grid h-screen w-screen grid-cols-[220px_1fr] rounded-[20px] rounded-none overflow-hidden border border-slate-200/80 bg-[#f0f4ff]">
 
-            <Sidebar activeNav={activeNav} onNavChange={setActiveNav} />
+            <Sidebar activeNav={activeNav} onNavChange={handleNavChange} />
 
             <div className="flex flex-col overflow-hidden">
                 <TopBar />
@@ -22,11 +35,17 @@ export default function Dashboard() {
 
                     <div className="grid grid-cols-[2fr_1fr] gap-4">
                         <BalanceCard />
-                        <QuickActions onNewTransfer={() => setShowTransfer(v => !v)} />
+                        <QuickActions onNewTransfer={() => { setTransferType('sepa'); setShowTransfer(v => !v) }} />
                     </div>
 
                     {showTransfer && (
-                        <TransferPanel onClose={() => setShowTransfer(false)} />
+                        <TransferPanel
+                            initialType={transferType}
+                            onClose={() => {
+                                setShowTransfer(false)
+                                setActiveNav('dashboard')
+                            }}
+                        />
                     )}
 
                     <div className="grid grid-cols-2 gap-4">
