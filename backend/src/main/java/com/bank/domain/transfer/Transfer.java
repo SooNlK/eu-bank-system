@@ -10,6 +10,9 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import com.bank.domain.shared.Money;
+import org.springframework.data.domain.AbstractAggregateRoot;
+
 @Entity
 @Table(name = "transfers")
 @Getter
@@ -17,7 +20,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Transfer {
+public class Transfer extends AbstractAggregateRoot<Transfer> {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -32,11 +35,12 @@ public class Transfer {
     @JoinColumn(name = "to_account_id")
     private Account toAccount;
 
-    @Column(nullable = false, precision = 19, scale = 4)
-    private BigDecimal amount;
-
-    @Column(nullable = false, length = 3)
-    private String currency = "EUR";
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "amount", column = @Column(name = "amount", nullable = false, precision = 19, scale = 4)),
+            @AttributeOverride(name = "currency", column = @Column(name = "currency", nullable = false, length = 3))
+    })
+    private Money amount;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

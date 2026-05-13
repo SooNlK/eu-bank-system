@@ -9,6 +9,8 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import com.bank.domain.shared.Money;
+
 @Entity
 @Table(name = "transactions")
 @Getter
@@ -27,8 +29,12 @@ public class Transaction {
     @JoinColumn(name = "account_id", nullable = false)
     private Account account;
 
-    @Column(nullable = false, precision = 19, scale = 4)
-    private BigDecimal amount;
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "amount", column = @Column(name = "amount", nullable = false, precision = 19, scale = 4)),
+            @AttributeOverride(name = "currency", column = @Column(name = "currency", nullable = false, length = 3))
+    })
+    private Money amount;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 10)
