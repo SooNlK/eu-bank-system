@@ -1,6 +1,50 @@
-const TRANSACTIONS = []
+export default function TransactionList({ transactions = [], loading }) {
+    
+    if (loading) {
+        return (
+            <div className="bg-white rounded-2xl border border-slate-200/70 p-4">
+                <div className="flex items-center justify-between mb-3.5">
+                    <p className="text-[13px] font-medium text-slate-800">Ostatnie transakcje</p>
+                </div>
+                <div className="animate-pulse flex flex-col gap-3 mt-4">
+                    <div className="h-10 bg-slate-100 rounded"></div>
+                    <div className="h-10 bg-slate-100 rounded"></div>
+                    <div className="h-10 bg-slate-100 rounded"></div>
+                </div>
+            </div>
+        )
+    }
 
-export default function TransactionList() {
+    const mappedTransactions = transactions.map(tx => {
+        const isExpense = tx.amount < 0;
+        const amountStr = new Intl.NumberFormat('pl-PL', { style: 'currency', currency: tx.currency }).format(Math.abs(tx.amount));
+        
+        const dateObj = new Date(tx.createdAt);
+        const dateStr = dateObj.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short', year: 'numeric' });
+
+        let iconBg = isExpense ? 'bg-red-50' : 'bg-green-50';
+        let icon = isExpense ? (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path d="M5 12h14M12 5l7 7-7 7" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+        ) : (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path d="M19 12H5M12 19l-7-7 7-7" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+        );
+
+        return {
+            id: tx.id,
+            iconBg,
+            icon,
+            name: tx.description || tx.type,
+            badge: { label: tx.type, className: 'bg-blue-50 text-blue-600' },
+            date: dateStr,
+            amount: (isExpense ? '- ' : '+ ') + amountStr,
+            amountColor: isExpense ? 'text-slate-800' : 'text-green-600'
+        };
+    });
+
     return (
         <div className="bg-white rounded-2xl border border-slate-200/70 p-4">
             <div className="flex items-center justify-between mb-3.5">
@@ -8,8 +52,8 @@ export default function TransactionList() {
                 <span className="text-[11px] text-blue-600 cursor-pointer">Wszystkie</span>
             </div>
 
-            {TRANSACTIONS.length > 0 ? (
-                TRANSACTIONS.map(({ id, iconBg, icon, name, badge, date, amount, amountColor }) => (
+            {mappedTransactions.length > 0 ? (
+                mappedTransactions.map(({ id, iconBg, icon, name, badge, date, amount, amountColor }) => (
                     <div
                         key={id}
                         className="flex items-center gap-3 py-2.5 border-b border-slate-100 last:border-b-0"
@@ -18,7 +62,7 @@ export default function TransactionList() {
                             {icon}
                         </div>
                         <div className="flex-1 min-w-0">
-                            <p className="text-[12px] font-medium text-slate-800">{name}</p>
+                            <p className="text-[12px] font-medium text-slate-800 truncate">{name}</p>
                             <div className="flex items-center gap-1.5 mt-px">
                                 <span className={`inline-flex items-center text-[10px] font-medium rounded-[5px] px-1.5 py-0.5 ${badge.className}`}>
                                     {badge.label}

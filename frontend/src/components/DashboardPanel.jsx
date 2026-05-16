@@ -1,6 +1,8 @@
+import { useState, useEffect } from 'react'
 import BalanceCard from './BalanceCard'
 import QuickActions from './QuickActions'
 import TransactionList from './TransactionList'
+import { getMyAccounts, getAccountTransactions } from '../services/account'
 
 const STATS = [
     {
@@ -30,6 +32,31 @@ const STATS = [
 ]
 
 export default function DashboardPanel({ onNewTransfer }) {
+    const [accounts, setAccounts] = useState([])
+    const [transactions, setTransactions] = useState([])
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        async function loadData() {
+            try {
+                const accs = await getMyAccounts()
+                setAccounts(accs)
+                
+                if (accs.length > 0) {
+                    // Fetch transactions for the first account
+                    const mainAccountId = accs[0].id
+                    const trans = await getAccountTransactions(mainAccountId)
+                    setTransactions(trans)
+                }
+            } catch (error) {
+                console.error("Failed to fetch dashboard data:", error)
+            } finally {
+                setLoading(false)
+            }
+        }
+        loadData()
+    }, [])
+
     return (
         <div className="flex flex-col gap-4">
             {/* Statystyki */}
@@ -54,12 +81,12 @@ export default function DashboardPanel({ onNewTransfer }) {
 
             {/* Saldo + szybkie akcje */}
             <div className="grid grid-cols-[2fr_1fr] gap-4">
-                <BalanceCard />
+                <BalanceCard accounts={accounts} loading={loading} />
                 <QuickActions onNewTransfer={onNewTransfer} />
             </div>
 
             {/* Ostatnie transakcje */}
-            <TransactionList />
+            <TransactionList transactions={transactions} loading={loading} />
         </div>
     )
 }

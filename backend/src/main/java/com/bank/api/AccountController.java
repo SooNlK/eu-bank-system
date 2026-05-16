@@ -12,6 +12,11 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import com.bank.service.AccountService;
+import com.bank.service.TransactionService;
+import com.bank.dto.transaction.TransactionResponse;
+import org.springframework.security.core.Authentication;
+
 import java.util.List;
 import java.util.UUID;
 
@@ -21,6 +26,14 @@ import java.util.UUID;
 @SecurityRequirement(name = "bearerAuth")
 public class AccountController {
 
+    private final AccountService accountService;
+    private final TransactionService transactionService;
+
+    public AccountController(AccountService accountService, TransactionService transactionService) {
+        this.accountService = accountService;
+        this.transactionService = transactionService;
+    }
+
     @GetMapping
     @Operation(summary = "Lista rachunków zalogowanego klienta",
             description = "Zwraca wszystkie rachunki (STANDARD i JUNIOR) przypisane do zalogowanego klienta.")
@@ -29,9 +42,8 @@ public class AccountController {
                     content = @Content(schema = @Schema(implementation = AccountResponse.class))),
             @ApiResponse(responseCode = "401", description = "Brak autoryzacji", content = @Content)
     })
-    public ResponseEntity<List<AccountResponse>> getMyAccounts() {
-        // TODO: implement AccountService.getAccountsForCurrentUser()
-        return ResponseEntity.ok(List.of());
+    public ResponseEntity<List<AccountResponse>> getMyAccounts(Authentication authentication) {
+        return ResponseEntity.ok(accountService.getAccountsForCurrentUser(authentication.getName()));
     }
 
     @GetMapping("/{accountId}")
@@ -45,9 +57,9 @@ public class AccountController {
             @ApiResponse(responseCode = "401", description = "Brak autoryzacji", content = @Content)
     })
     public ResponseEntity<AccountResponse> getAccount(
-            @Parameter(description = "UUID rachunku") @PathVariable UUID accountId) {
-        // TODO: implement AccountService.getAccount()
-        return ResponseEntity.notFound().build();
+            @Parameter(description = "UUID rachunku") @PathVariable UUID accountId,
+            Authentication authentication) {
+        return ResponseEntity.ok(accountService.getAccount(accountId, authentication.getName()));
     }
 
     @GetMapping("/{accountId}/balance")
@@ -60,8 +72,23 @@ public class AccountController {
             @ApiResponse(responseCode = "401", description = "Brak autoryzacji", content = @Content)
     })
     public ResponseEntity<AccountResponse> getBalance(
-            @Parameter(description = "UUID rachunku") @PathVariable UUID accountId) {
-        // TODO: implement AccountService.getBalance()
-        return ResponseEntity.notFound().build();
+            @Parameter(description = "UUID rachunku") @PathVariable UUID accountId,
+            Authentication authentication) {
+        return ResponseEntity.ok(accountService.getBalance(accountId, authentication.getName()));
+    }
+
+    @GetMapping("/{accountId}/transactions")
+    @Operation(summary = "Historia transakcji",
+            description = "Zwraca historię transakcji dla wybranego rachunku.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Lista transakcji",
+                    content = @Content(schema = @Schema(implementation = TransactionResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Rachunek nie istnieje", content = @Content),
+            @ApiResponse(responseCode = "401", description = "Brak autoryzacji", content = @Content)
+    })
+    public ResponseEntity<List<TransactionResponse>> getTransactions(
+            @Parameter(description = "UUID rachunku") @PathVariable UUID accountId,
+            Authentication authentication) {
+        return ResponseEntity.ok(transactionService.getTransactionsForAccount(accountId, authentication.getName()));
     }
 }
