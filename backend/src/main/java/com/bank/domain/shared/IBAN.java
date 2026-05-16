@@ -22,7 +22,7 @@ public class IBAN {
         if (value == null || value.trim().isEmpty()) {
             throw new IllegalArgumentException("IBAN cannot be empty");
         }
-        // A simple validation for PL IBAN length can be added here
+        // A simple validation for IBAN length can be added here
         String normalized = value.replaceAll("\\s+", "");
         return new IBAN(normalized);
     }
