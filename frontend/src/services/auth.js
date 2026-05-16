@@ -10,15 +10,24 @@ export async function register({ email, password, firstName, lastName, passportN
     })
 
     if (!response.ok) {
-        if (response.status === 409) {
-            throw new Error("Klient z podanym e-mailem lub numerem paszportu już istnieje.")
+        let errorMessage = "Nie udało się utworzyć konta. Spróbuj ponownie za chwilę."
+        try {
+            const errorData = await response.json()
+            if (errorData && errorData.message) {
+                errorMessage = errorData.message
+            } else if (response.status === 409) {
+                errorMessage = "Klient z podanym e-mailem lub numerem paszportu już istnieje."
+            } else if (response.status === 400) {
+                errorMessage = "Sprawdź poprawność danych rejestracyjnych."
+            }
+        } catch (e) {
+            if (response.status === 409) {
+                errorMessage = "Klient z podanym e-mailem lub numerem paszportu już istnieje."
+            } else if (response.status === 400) {
+                errorMessage = "Sprawdź poprawność danych rejestracyjnych."
+            }
         }
-
-        if (response.status === 400) {
-            throw new Error("Sprawdź poprawność danych rejestracyjnych.")
-        }
-
-        throw new Error("Nie udało się utworzyć konta. Spróbuj ponownie za chwilę.")
+        throw new Error(errorMessage)
     }
 
     return response.json()
@@ -34,15 +43,24 @@ export async function login({ email, password }) {
     })
 
     if (!response.ok) {
-        if (response.status === 401) {
-            throw new Error("Nieprawidłowy e-mail lub hasło.")
+        let errorMessage = "Nie udało się zalogować. Spróbuj ponownie za chwilę."
+        try {
+            const errorData = await response.json()
+            if (errorData && errorData.message) {
+                errorMessage = errorData.message
+            } else if (response.status === 401) {
+                errorMessage = "Nieprawidłowy e-mail lub hasło."
+            } else if (response.status === 400) {
+                errorMessage = "Sprawdź poprawność e-maila i hasła."
+            }
+        } catch (e) {
+            if (response.status === 401) {
+                errorMessage = "Nieprawidłowy e-mail lub hasło."
+            } else if (response.status === 400) {
+                errorMessage = "Sprawdź poprawność e-maila i hasła."
+            }
         }
-
-        if (response.status === 400) {
-            throw new Error("Sprawdź poprawność e-maila i hasła.")
-        }
-
-        throw new Error("Nie udało się zalogować. Spróbuj ponownie za chwilę.")
+        throw new Error(errorMessage)
     }
 
     const data = await response.json()
