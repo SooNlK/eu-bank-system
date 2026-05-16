@@ -21,5 +21,9 @@ public record RegisterRequest(
 
         @Schema(description = "Nazwisko", example = "Kowalski")
         @NotBlank @Size(max = 100)
-        String lastName
+        String lastName,
+
+        @Schema(description = "Numer paszportu", example = "C01X00T47")
+        @NotBlank @Size(max = 20)
+        String passportNumber
 ) {}

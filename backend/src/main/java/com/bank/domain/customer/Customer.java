@@ -35,6 +35,9 @@ public class Customer {
     @Column(nullable = false, length = 100)
     private String lastName;
 
+    @Column(name = "passport_number", unique = true, nullable = false, length = 20)
+    private String passportNumber;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private CustomerStatus status;

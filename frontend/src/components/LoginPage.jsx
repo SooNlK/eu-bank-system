@@ -1,29 +1,53 @@
 import { useState } from "react"
-import { login } from "../services/auth"
+import { login, register } from "../services/auth"
 import heroImage from "../assets/hero.png"
 
 export default function LoginPage({ onLogin }) {
+    const [mode, setMode] = useState("login")
     const [email, setEmail] = useState("")
     const [password, setPassword] = useState("")
+    const [firstName, setFirstName] = useState("")
+    const [lastName, setLastName] = useState("")
+    const [passportNumber, setPassportNumber] = useState("")
     const [error, setError] = useState("")
+    const [success, setSuccess] = useState("")
     const [isSubmitting, setIsSubmitting] = useState(false)
 
     async function handleSubmit(event) {
         event.preventDefault()
         setError("")
+        setSuccess("")
 
         if (!email.trim() || password.length < 8) {
             setError("Podaj poprawny e-mail i hasło składające się z co najmniej 8 znaków.")
             return
         }
 
+        if (mode === "register" && (!firstName.trim() || !lastName.trim() || !passportNumber.trim())) {
+            setError("Podaj imię, nazwisko oraz numer paszportu.")
+            return
+        }
+
         setIsSubmitting(true)
 
         try {
+            if (mode === "register") {
+                const registration = await register({
+                    email: email.trim(),
+                    password,
+                    firstName: firstName.trim(),
+                    lastName: lastName.trim(),
+                    passportNumber: passportNumber.trim(),
+                })
+                setMode("login")
+                setSuccess(`Klient został zarejestrowany. IBAN: ${formatIban(registration.accountNumber)}.`)
+                return
+            }
+
             const session = await login({ email: email.trim(), password })
             onLogin(session)
-        } catch (loginError) {
-            setError(loginError.message)
+        } catch (authError) {
+            setError(authError.message)
         } finally {
             setIsSubmitting(false)
         }
@@ -78,13 +102,43 @@ export default function LoginPage({ onLogin }) {
 
                         <div className="rounded-lg border border-slate-200 bg-white px-6 py-7 shadow-sm sm:px-8">
                             <div className="mb-6">
-                                <p className="text-[13px] font-medium text-[#1a3c8f]">Logowanie</p>
+                                <p className="text-[13px] font-medium text-[#1a3c8f]">
+                                    {mode === "login" ? "Logowanie" : "Rejestracja klienta"}
+                                </p>
                                 <h2 className="mt-1 text-[27px] font-semibold tracking-normal text-slate-950">
-                                    Witaj ponownie
+                                    {mode === "login" ? "Witaj ponownie" : "Otwórz konto"}
                                 </h2>
                             </div>
 
                             <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+                                {mode === "register" && (
+                                    <div className="grid gap-4 sm:grid-cols-2">
+                                        <label className="flex flex-col gap-1.5">
+                                            <span className="text-[13px] font-medium text-slate-700">Imię</span>
+                                            <input
+                                                type="text"
+                                                value={firstName}
+                                                onChange={(event) => setFirstName(event.target.value)}
+                                                autoComplete="given-name"
+                                                placeholder="Jan"
+                                                className="h-11 rounded-lg border border-slate-200 bg-slate-50 px-3 text-[14px] text-slate-900 outline-none transition focus:border-[#2563eb] focus:bg-white focus:ring-4 focus:ring-blue-100"
+                                            />
+                                        </label>
+
+                                        <label className="flex flex-col gap-1.5">
+                                            <span className="text-[13px] font-medium text-slate-700">Nazwisko</span>
+                                            <input
+                                                type="text"
+                                                value={lastName}
+                                                onChange={(event) => setLastName(event.target.value)}
+                                                autoComplete="family-name"
+                                                placeholder="Kowalski"
+                                                className="h-11 rounded-lg border border-slate-200 bg-slate-50 px-3 text-[14px] text-slate-900 outline-none transition focus:border-[#2563eb] focus:bg-white focus:ring-4 focus:ring-blue-100"
+                                            />
+                                        </label>
+                                    </div>
+                                )}
+
                                 <label className="flex flex-col gap-1.5">
                                     <span className="text-[13px] font-medium text-slate-700">E-mail</span>
                                     <input
@@ -96,6 +150,20 @@ export default function LoginPage({ onLogin }) {
                                         className="h-11 rounded-lg border border-slate-200 bg-slate-50 px-3 text-[14px] text-slate-900 outline-none transition focus:border-[#2563eb] focus:bg-white focus:ring-4 focus:ring-blue-100"
                                     />
                                 </label>
+
+                                {mode === "register" && (
+                                    <label className="flex flex-col gap-1.5">
+                                        <span className="text-[13px] font-medium text-slate-700">Numer paszportu</span>
+                                        <input
+                                            type="text"
+                                            value={passportNumber}
+                                            onChange={(event) => setPassportNumber(event.target.value)}
+                                            autoComplete="off"
+                                            placeholder="C01X00T47"
+                                            className="h-11 rounded-lg border border-slate-200 bg-slate-50 px-3 font-mono text-[14px] uppercase text-slate-900 outline-none transition focus:border-[#2563eb] focus:bg-white focus:ring-4 focus:ring-blue-100"
+                                        />
+                                    </label>
+                                )}
 
                                 <label className="flex flex-col gap-1.5">
                                     <span className="text-[13px] font-medium text-slate-700">Hasło</span>
@@ -115,15 +183,35 @@ export default function LoginPage({ onLogin }) {
                                     </div>
                                 )}
 
+                                {success && (
+                                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-[13px] leading-5 text-emerald-700">
+                                        {success}
+                                    </div>
+                                )}
+
                                 <button
                                     type="submit"
                                     disabled={isSubmitting}
                                     className="mt-1 flex h-11 items-center justify-center gap-2 rounded-lg border-none bg-[#1a3c8f] px-4 text-[14px] font-semibold text-white transition hover:bg-[#163579] disabled:cursor-not-allowed disabled:bg-slate-300"
                                 >
-                                    {isSubmitting ? "Logowanie..." : "Zaloguj się"}
+                                    {isSubmitting
+                                        ? (mode === "login" ? "Logowanie..." : "Tworzenie konta...")
+                                        : (mode === "login" ? "Zaloguj się" : "Zarejestruj klienta")}
                                     {!isSubmitting && <ArrowIcon />}
                                 </button>
                             </form>
+
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setMode(mode === "login" ? "register" : "login")
+                                    setError("")
+                                    setSuccess("")
+                                }}
+                                className="mt-5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-[13px] font-semibold text-[#1a3c8f] transition hover:bg-slate-50"
+                            >
+                                {mode === "login" ? "Zarejestruj nowego klienta" : "Mam już konto"}
+                            </button>
                         </div>
                     </div>
                 </section>
@@ -139,6 +227,10 @@ function GlobeIcon() {
             <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10A15.3 15.3 0 0 1 8 12 15.3 15.3 0 0 1 12 2z" stroke="white" strokeWidth="1.8" />
         </svg>
     )
+}
+
+function formatIban(value) {
+    return value?.replace(/(.{4})/g, "$1 ").trim() ?? ""
 }
 
 function ArrowIcon() {

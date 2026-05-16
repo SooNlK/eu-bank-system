@@ -25,6 +25,7 @@ class CustomerRepositoryTest {
                 .firstName("Jan")
                 .lastName("Kowalski")
                 .email("jan.kowalski@example.com")
+                .passportNumber("C01X00T47")
                 .passwordHash("hashed_password_123")
                 .status(CustomerStatus.ACTIVE)
                 .build();
@@ -37,6 +38,7 @@ class CustomerRepositoryTest {
         assertThat(foundCustomer).isPresent();
         assertThat(foundCustomer.get().getFirstName()).isEqualTo("Jan");
         assertThat(foundCustomer.get().getEmail()).isEqualTo("jan.kowalski@example.com");
+        assertThat(foundCustomer.get().getPassportNumber()).isEqualTo("C01X00T47");
         assertThat(foundCustomer.get().getId()).isNotNull();
         assertThat(foundCustomer.get().getCreatedAt()).isNotNull();
     }

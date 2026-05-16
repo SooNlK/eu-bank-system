@@ -3,7 +3,9 @@ package com.bank.api;
 import com.bank.dto.auth.LoginRequest;
 import com.bank.dto.auth.LoginResponse;
 import com.bank.dto.auth.RegisterRequest;
+import com.bank.dto.auth.RegisterResponse;
 import com.bank.security.JwtTokenProvider;
+import com.bank.service.CustomerRegistrationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -28,11 +30,14 @@ public class AuthController {
 
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider jwtTokenProvider;
+    private final CustomerRegistrationService customerRegistrationService;
 
     public AuthController(AuthenticationManager authenticationManager,
-                          JwtTokenProvider jwtTokenProvider) {
+                          JwtTokenProvider jwtTokenProvider,
+                          CustomerRegistrationService customerRegistrationService) {
         this.authenticationManager = authenticationManager;
         this.jwtTokenProvider = jwtTokenProvider;
+        this.customerRegistrationService = customerRegistrationService;
     }
 
     @PostMapping("/login")
@@ -55,12 +60,13 @@ public class AuthController {
     @Operation(summary = "Rejestracja nowego klienta",
             description = "Tworzy konto klienta. Domyślnie konto jest w statusie ACTIVE.")
     @ApiResponses({
-            @ApiResponse(responseCode = "201", description = "Klient zarejestrowany pomyślnie", content = @Content),
+            @ApiResponse(responseCode = "201", description = "Klient zarejestrowany pomyślnie",
+                    content = @Content(schema = @Schema(implementation = RegisterResponse.class))),
             @ApiResponse(responseCode = "409", description = "Klient z podanym e-mailem już istnieje", content = @Content),
             @ApiResponse(responseCode = "400", description = "Błąd walidacji danych wejściowych", content = @Content)
     })
-    public ResponseEntity<Void> register(@Valid @RequestBody RegisterRequest request) {
-        // TODO: implement CustomerService.register()
-        return ResponseEntity.status(HttpStatus.CREATED).build();
+    public ResponseEntity<RegisterResponse> register(@Valid @RequestBody RegisterRequest request) {
+        RegisterResponse response = customerRegistrationService.register(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 }

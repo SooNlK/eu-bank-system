@@ -50,6 +50,7 @@ public class DataSeeder implements CommandLineRunner {
                 .firstName("Hans")
                 .lastName("Müller")
                 .email("hans.mueller@example.de")
+                .passportNumber("C4F7X2L90")
                 .passwordHash(passwordEncoder.encode("password123"))
                 .status(CustomerStatus.ACTIVE)
                 .build();
@@ -58,6 +59,7 @@ public class DataSeeder implements CommandLineRunner {
                 .firstName("Erika")
                 .lastName("Schmidt")
                 .email("erika.schmidt@example.de")
+                .passportNumber("C9K1P8M44")
                 .passwordHash(passwordEncoder.encode("password123"))
                 .status(CustomerStatus.ACTIVE)
                 .build();
