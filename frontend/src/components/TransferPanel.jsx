@@ -1,50 +1,12 @@
 import { useState } from 'react'
 
-const TRANSFER_TYPES = [
-    {
-        id: 'sepa',
-        label: 'SEPA',
-        subtitle: 'SCT · do 1 dnia roboczego',
-        iconBg: 'bg-blue-50',
-        icon: (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="12" r="9" stroke="#2563eb" strokeWidth="1.8" />
-                <path d="M2 12h20" stroke="#2563eb" strokeWidth="1.8" />
-            </svg>
-        ),
-    },
-    {
-        id: 'instant',
-        label: 'SEPA Instant',
-        subtitle: 'SCT Inst · do 10 s',
-        iconBg: 'bg-green-50',
-        icon: (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="#16a34a" strokeWidth="1.8" strokeLinecap="round" />
-            </svg>
-        ),
-    },
-    {
-        id: 'target',
-        label: 'TARGET (T2)',
-        subtitle: 'RTGS · Eurosystem',
-        iconBg: 'bg-purple-50',
-        icon: (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                <rect x="3" y="3" width="18" height="18" rx="2" stroke="#9333ea" strokeWidth="1.8" />
-                <path d="M3 9h18M9 21V9" stroke="#9333ea" strokeWidth="1.8" />
-            </svg>
-        ),
-    },
-]
-
 const inputClass =
     'w-full text-[12px] border border-slate-200 rounded-[9px] px-3 py-2 text-slate-800 bg-slate-50 outline-none focus:border-blue-400'
 
 const labelClass = 'text-[11px] text-slate-500 font-medium mb-1.5 block'
 
 export default function TransferPanel({ onClose, initialType = 'sepa' }) {
-    const [selected, setSelected] = useState(initialType)
+    const selected = initialType
     const [form, setForm] = useState({
         beneficiaryName: '',
         iban: '',
@@ -78,29 +40,6 @@ export default function TransferPanel({ onClose, initialType = 'sepa' }) {
                 </button>
             </div>
 
-            <div className="grid grid-cols-3 gap-2.5 mb-5">
-                {TRANSFER_TYPES.map(({ id, label, subtitle, iconBg, icon }) => (
-                    <button
-                        key={id}
-                        type="button"
-                        onClick={() => setSelected(id)}
-                        className={`border rounded-xl p-3 cursor-pointer flex items-center gap-3 text-left w-full transition-colors
-                            ${selected === id
-                                ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500/20'
-                                : 'border-slate-200 bg-white hover:border-slate-300'
-                            }`}
-                    >
-                        <div className={`w-8 h-8 ${iconBg} rounded-lg flex items-center justify-center shrink-0`}>
-                            {icon}
-                        </div>
-                        <div className="min-w-0">
-                            <p className="text-[12px] font-medium text-slate-800 truncate">{label}</p>
-                            <p className="text-[10px] text-slate-500 leading-tight">{subtitle}</p>
-                        </div>
-                    </button>
-                ))}
-            </div>
-
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="sm:col-span-2">
@@ -109,7 +48,6 @@ export default function TransferPanel({ onClose, initialType = 'sepa' }) {
                             type="text"
                             value={form.beneficiaryName}
                             onChange={set('beneficiaryName')}
-                            placeholder="Jan Kowalski lub Nazwa firmy Sp. z o.o."
                             className={inputClass}
                             autoComplete="name"
                             required
@@ -121,7 +59,6 @@ export default function TransferPanel({ onClose, initialType = 'sepa' }) {
                             type="text"
                             value={form.iban}
                             onChange={set('iban')}
-                            placeholder="DE89 3704 0044 0532 0130 00"
                             className={inputClass}
                             autoComplete="off"
                             required
@@ -140,7 +77,6 @@ export default function TransferPanel({ onClose, initialType = 'sepa' }) {
                             type="text"
                             value={form.bic}
                             onChange={set('bic')}
-                            placeholder="COBADEFFXXX"
                             className={inputClass}
                             required={selected === 'target'}
                         />
@@ -151,7 +87,6 @@ export default function TransferPanel({ onClose, initialType = 'sepa' }) {
                             type="number"
                             value={form.amount}
                             onChange={set('amount')}
-                            placeholder="0.00"
                             min="0.01"
                             step="0.01"
                             className={inputClass}
@@ -182,7 +117,6 @@ export default function TransferPanel({ onClose, initialType = 'sepa' }) {
                                 type="text"
                                 value={form.endToEndId}
                                 onChange={set('endToEndId')}
-                                placeholder="np. faktura FV/2025/03 — max 140 znaków wg ISO 20022"
                                 maxLength={140}
                                 className={inputClass}
                             />
@@ -204,7 +138,6 @@ export default function TransferPanel({ onClose, initialType = 'sepa' }) {
                             type="text"
                             value={form.uetr}
                             onChange={set('uetr')}
-                            placeholder="Format UUID wg ISO 20022 — często nadawany przez bank"
                             className={inputClass}
                         />
                     </div>
@@ -216,7 +149,6 @@ export default function TransferPanel({ onClose, initialType = 'sepa' }) {
                         type="text"
                         value={form.remittance}
                         onChange={set('remittance')}
-                        placeholder="Np. opłata za usługi marzec 2025"
                         maxLength={140}
                         className={inputClass}
                     />
@@ -230,7 +162,6 @@ export default function TransferPanel({ onClose, initialType = 'sepa' }) {
                         type="text"
                         value={form.creditorReference}
                         onChange={set('creditorReference')}
-                        placeholder="np. RF18539007547034 (ISO 11649)"
                         className={inputClass}
                     />
                 </div>

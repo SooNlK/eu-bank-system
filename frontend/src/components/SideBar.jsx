@@ -1,14 +1,6 @@
 const NAV_ITEMS = [
     { id: 'dashboard', label: 'Pulpit', icon: HomeIcon },
-    { id: 'accounts', label: 'Rachunki', icon: CardIcon },
     { id: 'transfers', label: 'Przelewy', icon: ActivityIcon },
-]
-
-const TRANSFER_ITEMS = [
-    { id: 'sepa', label: 'SEPA', icon: GlobeIcon },
-    { id: 'instant', label: 'SEPA Instant', icon: BoltIcon },
-    { id: 'target', label: 'TARGET2', icon: GridIcon },
-    { id: 'internal', label: 'Przelew wewnętrzny', icon: InternalIcon },
 ]
 
 const TRANSFER_IDS = ['sepa', 'instant', 'target', 'internal', 'transfers']
@@ -55,24 +47,6 @@ export default function Sidebar({ activeNav, onNavChange, userEmail }) {
                         </button>
                     )
                 })}
-
-                <p className="text-white/30 text-[10px] tracking-[0.08em] uppercase px-3 pb-1.5 pt-2 mt-4">
-                    Transfery
-                </p>
-                {TRANSFER_ITEMS.map(item => (
-                    <button
-                        key={item.id}
-                        onClick={() => onNavChange(item.id)}
-                        className={`flex items-center gap-2.5 w-full px-3 py-2.5 rounded-[10px] mb-0.5 text-[13px] font-medium text-left border-none transition-colors duration-150 cursor-pointer
-                            ${activeNav === item.id
-                                ? 'bg-white/15 text-white'
-                                : 'bg-transparent text-white/60 hover:bg-white/[0.08] hover:text-white/85'
-                            }`}
-                    >
-                        <item.icon size={16} color="currentColor" />
-                        {item.label}
-                    </button>
-                ))}
             </nav>
 
             <div className="flex items-center gap-2.5 px-3 py-4 border-t border-white/10">
@@ -115,14 +89,7 @@ function HomeIcon({ size = 16, color = 'currentColor' }) {
         </svg>
     )
 }
-function CardIcon({ size = 16, color = 'currentColor' }) {
-    return (
-        <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-            <rect x="2" y="5" width="20" height="14" rx="2" stroke={color} strokeWidth="1.8" />
-            <path d="M2 10h20" stroke={color} strokeWidth="1.8" />
-        </svg>
-    )
-}
+
 function ActivityIcon({ size = 16, color = 'currentColor' }) {
     return (
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -151,29 +118,6 @@ function GlobeIcon({ size = 16, color = 'currentColor' }) {
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
             <circle cx="12" cy="12" r="9" stroke={color} strokeWidth="1.8" />
             <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10A15.3 15.3 0 0 1 8 12 15.3 15.3 0 0 1 12 2z" stroke={color} strokeWidth="1.8" />
-        </svg>
-    )
-}
-function BoltIcon({ size = 16, color = 'currentColor' }) {
-    return (
-        <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-    )
-}
-function GridIcon({ size = 16, color = 'currentColor' }) {
-    return (
-        <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-            <rect x="3" y="3" width="18" height="18" rx="2" stroke={color} strokeWidth="1.8" />
-            <path d="M3 9h18M9 21V9" stroke={color} strokeWidth="1.8" />
-        </svg>
-    )
-}
-function InternalIcon({ size = 16, color = 'currentColor' }) {
-    return (
-        <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-            <path d="M7 16V4m0 0L3 8m4-4l4 4" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M17 8v12m0 0l4-4m-4 4l-4-4" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
     )
 }
