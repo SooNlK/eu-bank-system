@@ -24,6 +24,10 @@ public record RegisterRequest(
         String lastName,
 
         @Schema(description = "Numer paszportu", example = "C01X00T47")
-        @NotBlank @Size(max = 20)
+        @NotBlank 
+        @jakarta.validation.constraints.Pattern(
+            regexp = "^[CFGHJKLMNPRTVWXYZcfghjklmnprtvwxyz0-9]{9}$", 
+            message = "Numer paszportu musi mieć 9 znaków i zawierać tylko cyfry oraz dozwolone litery (C,F,G,H,J,K,L,M,N,P,R,T,V,W,X,Y,Z)"
+        )
         String passportNumber
 ) {}
