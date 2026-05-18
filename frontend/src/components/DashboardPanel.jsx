@@ -1,64 +1,95 @@
+import { useState, useEffect } from 'react'
 import BalanceCard from './BalanceCard'
 import QuickActions from './QuickActions'
 import TransactionList from './TransactionList'
+import { getMyAccounts, getAccountTransactions } from '../services/account'
 
-const STATS = [
-    {
-        label: 'Przychody (kwiecień)',
-        value: '€ 3 700,00',
-        change: '+12%',
-        positive: true,
-        icon: (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                <path d="M12 19V5M5 12l7-7 7 7" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-        ),
-        iconBg: 'bg-green-50',
-    },
-    {
-        label: 'Wydatki (kwiecień)',
-        value: '€ 12 233,49',
-        change: '-5%',
-        positive: false,
-        icon: (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                <path d="M12 5v14M5 12l7 7 7-7" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-        ),
-        iconBg: 'bg-red-50',
-    },
-    {
-        label: 'Przelewy oczekujące',
-        value: '2',
-        change: null,
-        icon: (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="12" r="10" stroke="#2563eb" strokeWidth="1.8" />
-                <path d="M12 8v4l2.5 2.5" stroke="#2563eb" strokeWidth="1.8" strokeLinecap="round" />
-            </svg>
-        ),
-        iconBg: 'bg-blue-50',
-    },
-]
+function formatEur(amount) {
+    return `€ ${amount.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
 
 export default function DashboardPanel({ onNewTransfer }) {
+    const [accounts, setAccounts] = useState([])
+    const [transactions, setTransactions] = useState([])
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        async function loadData() {
+            try {
+                const accs = await getMyAccounts()
+                setAccounts(accs)
+
+                if (accs.length > 0) {
+                    const mainAccountId = accs[0].id
+                    const trans = await getAccountTransactions(mainAccountId)
+                    setTransactions(trans)
+                }
+            } catch (error) {
+                console.error("Failed to fetch dashboard data:", error)
+            } finally {
+                setLoading(false)
+            }
+        }
+        loadData()
+    }, [])
+
+    // Oblicz przychody i wydatki bieżącego miesiąca
+    const now = new Date()
+    const currentMonth = now.getMonth()
+    const currentYear = now.getFullYear()
+
+    const monthlyTransactions = transactions.filter(t => {
+        const d = new Date(t.createdAt || t.date)
+        return d.getMonth() === currentMonth && d.getFullYear() === currentYear
+    })
+
+    const income = monthlyTransactions
+        .filter(t => t.type === 'CREDIT')
+        .reduce((sum, t) => sum + (t.amount?.amount ?? t.amount ?? 0), 0)
+
+    const expenses = monthlyTransactions
+        .filter(t => t.type === 'DEBIT')
+        .reduce((sum, t) => sum + (t.amount?.amount ?? t.amount ?? 0), 0)
+
+    const monthName = now.toLocaleString('pl-PL', { month: 'long' })
+
+    const STATS = [
+        {
+            label: `Przychody (${monthName})`,
+            value: formatEur(income),
+            positive: true,
+            icon: (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <path d="M12 19V5M5 12l7-7 7 7" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+            ),
+            iconBg: 'bg-green-50',
+        },
+        {
+            label: `Wydatki (${monthName})`,
+            value: formatEur(expenses),
+            positive: false,
+            icon: (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <path d="M12 5v14M5 12l7 7 7-7" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+            ),
+            iconBg: 'bg-red-50',
+        },
+    ]
+
     return (
         <div className="flex flex-col gap-4">
             {/* Statystyki */}
             <div className="grid grid-cols-3 gap-3">
-                {STATS.map(({ label, value, change, positive, icon, iconBg }) => (
+                {STATS.map(({ label, value, positive, icon, iconBg }) => (
                     <div key={label} className="bg-white rounded-2xl border border-slate-200/70 p-4 flex items-center gap-3">
                         <div className={`w-10 h-10 ${iconBg} rounded-[10px] flex items-center justify-center shrink-0`}>
                             {icon}
                         </div>
                         <div>
                             <p className="text-[11px] text-slate-500">{label}</p>
-                            <p className="text-[15px] font-semibold text-slate-800">{value}</p>
-                            {change && (
-                                <p className={`text-[10px] font-medium ${positive ? 'text-green-600' : 'text-red-500'}`}>
-                                    {change} vs. poprz. miesiąc
-                                </p>
-                            )}
+                            <p className={`text-[15px] font-semibold ${positive ? 'text-green-700' : 'text-red-600'}`}>{value}</p>
                         </div>
                     </div>
                 ))}
@@ -66,31 +97,12 @@ export default function DashboardPanel({ onNewTransfer }) {
 
             {/* Saldo + szybkie akcje */}
             <div className="grid grid-cols-[2fr_1fr] gap-4">
-                <BalanceCard />
+                <BalanceCard accounts={accounts} loading={loading} />
                 <QuickActions onNewTransfer={onNewTransfer} />
             </div>
 
             {/* Ostatnie transakcje */}
-            <div className="grid grid-cols-2 gap-4">
-                <TransactionList />
-                <div className="bg-white rounded-2xl border border-slate-200/70 p-4">
-                    <p className="text-[13px] font-medium text-slate-800 mb-3">Nadchodzące płatności</p>
-                    {[
-                        { name: 'Czynsz miesięczny', date: '1 maj', amount: '€ 850,00', color: 'text-red-600' },
-                        { name: 'Ubezpieczenie OC', date: '5 maj', amount: '€ 120,00', color: 'text-red-600' },
-                        { name: 'Subskrypcja SaaS', date: '12 maj', amount: '€ 49,00', color: 'text-red-600' },
-                    ].map(({ name, date, amount, color }) => (
-                        <div key={name} className="flex items-center gap-3 py-2.5 border-b border-slate-100 last:border-b-0">
-                            <div className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
-                            <div className="flex-1 min-w-0">
-                                <p className="text-[12px] font-medium text-slate-800 truncate">{name}</p>
-                                <p className="text-[10px] text-slate-400">{date}</p>
-                            </div>
-                            <span className={`text-[13px] font-medium ${color}`}>{amount}</span>
-                        </div>
-                    ))}
-                </div>
-            </div>
+            <TransactionList transactions={transactions} loading={loading} />
         </div>
     )
 }

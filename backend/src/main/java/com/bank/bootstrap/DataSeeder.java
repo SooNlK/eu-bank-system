@@ -50,6 +50,7 @@ public class DataSeeder implements CommandLineRunner {
                 .firstName("Hans")
                 .lastName("Müller")
                 .email("hans.mueller@example.de")
+                .passportNumber("C4F7X2L90")
                 .passwordHash(passwordEncoder.encode("password123"))
                 .status(CustomerStatus.ACTIVE)
                 .build();
@@ -58,6 +59,7 @@ public class DataSeeder implements CommandLineRunner {
                 .firstName("Erika")
                 .lastName("Schmidt")
                 .email("erika.schmidt@example.de")
+                .passportNumber("C9K1P8M44")
                 .passwordHash(passwordEncoder.encode("password123"))
                 .status(CustomerStatus.ACTIVE)
                 .build();
@@ -74,15 +76,6 @@ public class DataSeeder implements CommandLineRunner {
                 .status(AccountStatus.ACTIVE)
                 .build();
 
-        Account hansAccount2 = Account.builder()
-                .customer(hans)
-                .accountNumber(AccountNumber.of("DE89100110010987654321"))
-                .type(AccountType.STANDARD)
-                .balance(Money.of(new BigDecimal("15420.75"), "EUR"))
-                .reservedBalance(Money.of(BigDecimal.ZERO, "EUR"))
-                .status(AccountStatus.ACTIVE)
-                .build();
-
         // 3. Create Account for Erika
         Account erikaAccount1 = Account.builder()
                 .customer(erika)
@@ -93,7 +86,7 @@ public class DataSeeder implements CommandLineRunner {
                 .status(AccountStatus.ACTIVE)
                 .build();
 
-        accountRepository.saveAll(List.of(hansAccount1, hansAccount2, erikaAccount1));
+        accountRepository.saveAll(List.of(hansAccount1, erikaAccount1));
 
         // 4. Create Transactions for Hans
         Transaction t1 = Transaction.builder()

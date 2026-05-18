@@ -2,7 +2,6 @@ import { useState } from 'react'
 import Sidebar from './SideBar'
 import TopBar from './TopBar'
 import DashboardPanel from './DashboardPanel'
-import AccountsPanel from './AccountsPanel'
 import TransfersPanel from './TransfersPanel'
 
 const TRANSFER_NAV_IDS = ['sepa', 'instant', 'target', 'internal', 'transfers']
@@ -16,9 +15,7 @@ export default function Dashboard({ userEmail, onLogout }) {
     }
 
     const renderContent = () => {
-        if (activeNav === 'accounts') {
-            return <AccountsPanel />
-        }
+
         if (TRANSFER_NAV_IDS.includes(activeNav)) {
             // Jeśli kliknięto konkretny sub-typ (sepa/instant/target/internal), otwórz od razu ten formularz.
             // Jeśli kliknięto ogólne "Przelewy", pokaż widok bez pre-selekcji.

@@ -60,12 +60,7 @@ const TRANSFER_TYPES = [
     },
 ]
 
-const RECENT_TRANSFERS = [
-    { name: 'Jan Kowalski', iban: 'PL83 1090 2590 ...', amount: '€ 500,00', date: '21 kwi', type: 'SEPA Instant', positive: true },
-    { name: 'Amazon Europe', iban: 'DE89 3704 ...', amount: '€ 89,99', date: '22 kwi', type: 'SEPA', positive: false },
-    { name: 'Deutsche Bank AG', iban: 'DE91 1000 ...', amount: '€ 12 000,00', date: '20 kwi', type: 'TARGET2', positive: false },
-    { name: 'Konto oszczędnościowe', iban: 'PL83 1090 ...', amount: '€ 2 000,00', date: '15 kwi', type: 'Wewn.', positive: true },
-]
+const RECENT_TRANSFERS = []
 
 export default function TransfersPanel({ initialType = null, onTypeChange }) {
     const [activeForm, setActiveForm] = useState(initialType)
@@ -130,28 +125,32 @@ export default function TransfersPanel({ initialType = null, onTypeChange }) {
             {!activeForm && (
                 <div className="bg-white rounded-2xl border border-slate-200/70 p-4">
                     <p className="text-[13px] font-medium text-slate-800 mb-3">Ostatnie przelewy</p>
-                    {RECENT_TRANSFERS.map(({ name, iban, amount, date, type, positive }) => (
-                        <div key={name + date} className="flex items-center gap-3 py-2.5 border-b border-slate-100 last:border-b-0">
-                            <div className="w-9 h-9 bg-slate-100 rounded-[10px] flex items-center justify-center shrink-0">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                                    <path d="M17 20h5v-2a3 3 0 0 0-5.356-1.857M7 20H2v-2a3 3 0 0 1 5.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 0 1 9.288 0"
-                                        stroke="#64748b" strokeWidth="1.6" strokeLinecap="round" />
-                                </svg>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <p className="text-[12px] font-medium text-slate-800 truncate">{name}</p>
-                                <div className="flex items-center gap-1.5 mt-px">
-                                    <span className="inline-flex items-center text-[10px] font-medium rounded-[5px] px-1.5 py-0.5 bg-slate-100 text-slate-600">
-                                        {type}
-                                    </span>
-                                    <span className="text-[10px] text-slate-400">{date} · {iban}</span>
+                    {RECENT_TRANSFERS.length > 0 ? (
+                        RECENT_TRANSFERS.map(({ name, iban, amount, date, type, positive }) => (
+                            <div key={name + date} className="flex items-center gap-3 py-2.5 border-b border-slate-100 last:border-b-0">
+                                <div className="w-9 h-9 bg-slate-100 rounded-[10px] flex items-center justify-center shrink-0">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                        <path d="M17 20h5v-2a3 3 0 0 0-5.356-1.857M7 20H2v-2a3 3 0 0 1 5.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 0 1 9.288 0"
+                                            stroke="#64748b" strokeWidth="1.6" strokeLinecap="round" />
+                                    </svg>
                                 </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-[12px] font-medium text-slate-800 truncate">{name}</p>
+                                    <div className="flex items-center gap-1.5 mt-px">
+                                        <span className="inline-flex items-center text-[10px] font-medium rounded-[5px] px-1.5 py-0.5 bg-slate-100 text-slate-600">
+                                            {type}
+                                        </span>
+                                        <span className="text-[10px] text-slate-400">{date} · {iban}</span>
+                                    </div>
+                                </div>
+                                <span className={`text-[13px] font-medium ${positive ? 'text-green-600' : 'text-red-600'}`}>
+                                    {positive ? '+ ' : '- '}{amount}
+                                </span>
                             </div>
-                            <span className={`text-[13px] font-medium ${positive ? 'text-green-600' : 'text-red-600'}`}>
-                                {positive ? '+ ' : '- '}{amount}
-                            </span>
-                        </div>
-                    ))}
+                        ))
+                    ) : (
+                        <p className="text-[12px] text-slate-400 py-4 text-center">Brak ostatnich przelewów</p>
+                    )}
                 </div>
             )}
         </div>
