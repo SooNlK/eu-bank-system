@@ -16,14 +16,16 @@ export default function TransactionList({ transactions = [], loading }) {
     }
 
     const mappedTransactions = transactions.map(tx => {
-        const isExpense = tx.amount < 0;
-        const amountStr = new Intl.NumberFormat('pl-PL', { style: 'currency', currency: tx.currency }).format(Math.abs(tx.amount));
-        
+        const isExpense = tx.type === 'DEBIT';
+        const rawAmount = tx.amount?.amount ?? tx.amount ?? 0;
+        const currency = tx.amount?.currency ?? tx.currency ?? 'EUR';
+        const amountStr = new Intl.NumberFormat('pl-PL', { style: 'currency', currency }).format(rawAmount);
+
         const dateObj = new Date(tx.createdAt);
         const dateStr = dateObj.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short', year: 'numeric' });
 
-        let iconBg = isExpense ? 'bg-red-50' : 'bg-green-50';
-        let icon = isExpense ? (
+        const iconBg = isExpense ? 'bg-red-50' : 'bg-green-50';
+        const icon = isExpense ? (
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                 <path d="M5 12h14M12 5l7 7-7 7" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
@@ -38,10 +40,13 @@ export default function TransactionList({ transactions = [], loading }) {
             iconBg,
             icon,
             name: tx.description || tx.type,
-            badge: { label: tx.type, className: 'bg-blue-50 text-blue-600' },
+            badge: {
+                label: tx.type,
+                className: isExpense ? 'bg-red-50 text-red-500' : 'bg-green-50 text-green-600'
+            },
             date: dateStr,
             amount: (isExpense ? '- ' : '+ ') + amountStr,
-            amountColor: isExpense ? 'text-slate-800' : 'text-green-600'
+            amountColor: isExpense ? 'text-red-500' : 'text-green-600'
         };
     });
 
