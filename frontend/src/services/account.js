@@ -37,3 +37,33 @@ export async function getAccountTransactions(accountId) {
     }
     return response.json()
 }
+
+async function readError(response) {
+    try {
+        const body = await response.json()
+        return body.message || "Request failed"
+    } catch {
+        return "Request failed"
+    }
+}
+
+export async function createInternalTransfer({ fromAccountId, toIban, amount, currency, valueDate, description }) {
+    const response = await fetch("/api/transfers", {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify({
+            fromAccountId,
+            toIban,
+            amount,
+            currency,
+            valueDate,
+            channel: "INTERNAL",
+            description,
+        }),
+    })
+
+    if (!response.ok) {
+        throw new Error(await readError(response))
+    }
+    return response.json()
+}

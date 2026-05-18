@@ -11,9 +11,11 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.security.core.Authentication;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import com.bank.service.TransferService;
 
 import java.util.List;
 import java.util.UUID;
@@ -23,6 +25,12 @@ import java.util.UUID;
 @Tag(name = "Transfers", description = "Przelewy bankowe: wewnętrzne, SEPA, SEPA Instant, TARGET2, SWIFT")
 @SecurityRequirement(name = "bearerAuth")
 public class TransferController {
+
+    private final TransferService transferService;
+
+    public TransferController(TransferService transferService) {
+        this.transferService = transferService;
+    }
 
     @PostMapping
     @Operation(summary = "Zlecenie przelewu",
@@ -35,9 +43,12 @@ public class TransferController {
             @ApiResponse(responseCode = "403", description = "Brak dostępu do rachunku źródłowego", content = @Content),
             @ApiResponse(responseCode = "401", description = "Brak autoryzacji", content = @Content)
     })
-    public ResponseEntity<TransferResponse> createTransfer(@Valid @RequestBody TransferRequest request) {
-        // TODO: implement TransferService.execute()
-        return ResponseEntity.status(HttpStatus.CREATED).build();
+    public ResponseEntity<TransferResponse> createTransfer(
+            @Valid @RequestBody TransferRequest request,
+            Authentication authentication
+    ) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(transferService.execute(request, authentication.getName()));
     }
 
     @GetMapping
@@ -48,9 +59,8 @@ public class TransferController {
                     content = @Content(schema = @Schema(implementation = TransferResponse.class))),
             @ApiResponse(responseCode = "401", description = "Brak autoryzacji", content = @Content)
     })
-    public ResponseEntity<List<TransferResponse>> getTransfers() {
-        // TODO: implement TransferService.getHistory()
-        return ResponseEntity.ok(List.of());
+    public ResponseEntity<List<TransferResponse>> getTransfers(Authentication authentication) {
+        return ResponseEntity.ok(transferService.getHistory(authentication.getName()));
     }
 
     @GetMapping("/{transferId}")
@@ -62,9 +72,9 @@ public class TransferController {
             @ApiResponse(responseCode = "401", description = "Brak autoryzacji", content = @Content)
     })
     public ResponseEntity<TransferResponse> getTransfer(
-            @Parameter(description = "UUID przelewu") @PathVariable UUID transferId) {
-        // TODO: implement TransferService.getById()
-        return ResponseEntity.notFound().build();
+            @Parameter(description = "UUID przelewu") @PathVariable UUID transferId,
+            Authentication authentication) {
+        return ResponseEntity.ok(transferService.getById(transferId, authentication.getName()));
     }
 
     @PostMapping("/{transferId}/approve")
@@ -79,8 +89,7 @@ public class TransferController {
     })
     public ResponseEntity<TransferResponse> approveTransfer(
             @Parameter(description = "UUID przelewu") @PathVariable UUID transferId) {
-        // TODO: implement TransferService.approve()
-        return ResponseEntity.notFound().build();
+        return ResponseEntity.ok(transferService.approve(transferId));
     }
 
     @PostMapping("/{transferId}/reject")
@@ -93,7 +102,6 @@ public class TransferController {
     })
     public ResponseEntity<TransferResponse> rejectTransfer(
             @Parameter(description = "UUID przelewu") @PathVariable UUID transferId) {
-        // TODO: implement TransferService.reject()
-        return ResponseEntity.notFound().build();
+        return ResponseEntity.ok(transferService.reject(transferId));
     }
 }

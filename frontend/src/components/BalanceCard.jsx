@@ -1,4 +1,28 @@
+import { useState, useEffect } from 'react';
+
 export default function BalanceCard({ accounts = [], loading }) {
+    const [selectedId, setSelectedId] = useState(null);
+    const [copied, setCopied] = useState(false);
+
+    useEffect(() => {
+        if (accounts && accounts.length > 0 && !selectedId) {
+            setSelectedId(accounts[0].id);
+        }
+    }, [accounts, selectedId]);
+
+    const selectedAccount = accounts.find(acc => acc.id === selectedId) || accounts[0];
+
+    const formatIBAN = (iban) => {
+        if (!iban) return '';
+        return iban.replace(/\s+/g, '').replace(/(.{4})/g, '$1 ').trim();
+    };
+
+    const handleCopy = (text) => {
+        navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
     // Calculate total balance across all accounts
     let totalBalance = 0;
     let mainCurrency = 'EUR'; // Default to EUR or take from first account
@@ -46,7 +70,7 @@ export default function BalanceCard({ accounts = [], loading }) {
                     {mainCurrency === 'PLN' && <span className="text-[22px] ml-1">zł</span>}
                 </p>
 
-                <div className="flex items-center gap-2 mb-5">
+                <div className="flex items-center gap-2 mb-4">
                     <div className="bg-green-400/20 rounded-[5px] px-1.5 py-0.5 flex items-center gap-1">
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
                             <polyline points="18 15 12 9 6 15" stroke="#4ade80" strokeWidth="2.5" strokeLinecap="round" />
@@ -57,13 +81,61 @@ export default function BalanceCard({ accounts = [], loading }) {
                 </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-2 mt-auto">
-                {accountCards.map(({ label, value, id }) => (
-                    <div key={id} className="bg-white/10 rounded-[10px] p-2.5">
-                        <p className="text-white/50 text-[10px] mb-0.5 whitespace-nowrap overflow-hidden text-ellipsis">{label}</p>
-                        <p className="text-white text-[14px] font-medium whitespace-nowrap overflow-hidden text-ellipsis">{value}</p>
+            {/* Szegóły wybranego konta (IBAN, typ, status) */}
+            {selectedAccount && (
+                <div className="bg-white/10 border border-white/5 rounded-[12px] p-3.5 my-3 flex items-center justify-between backdrop-blur-sm transition-all duration-200">
+                    <div className="min-w-0 flex-1 mr-3 text-left">
+                        <div className="flex items-center gap-1.5 mb-1">
+                            <span className="text-[10px] font-semibold text-white/60 uppercase tracking-[0.05em]">
+                                {selectedAccount.type === 'STANDARD' ? 'Rachunek główny' : selectedAccount.type}
+                            </span>
+                            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
+                            <span className="text-[9px] text-green-400 font-medium uppercase tracking-[0.02em]">Aktywne</span>
+                        </div>
+                        <p className="text-white text-[13px] font-mono tracking-wider font-semibold truncate select-all">
+                            {formatIBAN(selectedAccount.accountNumber)}
+                        </p>
                     </div>
-                ))}
+                    <button
+                        onClick={() => handleCopy(selectedAccount.accountNumber)}
+                        className="bg-white/10 hover:bg-white/20 border-none rounded-lg p-2 cursor-pointer text-white flex items-center justify-center transition-all duration-200 hover:scale-105 shrink-0"
+                        title="Skopiuj numer konta"
+                    >
+                        {copied ? (
+                            <div className="flex items-center gap-1">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="20 6 9 17 4 12"></polyline>
+                                </svg>
+                                <span className="text-[10px] text-green-400 font-medium">Skopiowano</span>
+                            </div>
+                        ) : (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            </svg>
+                        )}
+                    </button>
+                </div>
+            )}
+
+            <div className="grid grid-cols-3 gap-2 mt-auto">
+                {accountCards.map(({ label, value, id }) => {
+                    const isSelected = selectedId === id;
+                    return (
+                        <button
+                            key={id}
+                            onClick={() => setSelectedId(id)}
+                            className={`text-left border border-solid p-2.5 rounded-[10px] transition-all duration-200 cursor-pointer w-full bg-white/5 ${
+                                isSelected 
+                                ? 'border-white/30 bg-white/15 shadow-inner scale-[1.02]' 
+                                : 'border-transparent hover:bg-white/10'
+                            }`}
+                        >
+                            <p className="text-white/50 text-[10px] mb-0.5 whitespace-nowrap overflow-hidden text-ellipsis">{label}</p>
+                            <p className="text-white text-[14px] font-medium whitespace-nowrap overflow-hidden text-ellipsis">{value}</p>
+                        </button>
+                    );
+                })}
                 {accountCards.length === 0 && (
                      <div className="bg-white/10 rounded-[10px] p-2.5 col-span-3 text-center">
                          <p className="text-white/50 text-[12px]">Brak rachunków</p>

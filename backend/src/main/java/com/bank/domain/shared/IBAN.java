@@ -22,9 +22,33 @@ public class IBAN {
         if (value == null || value.trim().isEmpty()) {
             throw new IllegalArgumentException("IBAN cannot be empty");
         }
-        // A simple validation for IBAN length can be added here
-        String normalized = value.replaceAll("\\s+", "");
+        String normalized = value.replaceAll("\\s+", "").toUpperCase();
+        if (!isValid(normalized)) {
+            throw new IllegalArgumentException("Invalid IBAN");
+        }
         return new IBAN(normalized);
+    }
+
+    private static boolean isValid(String iban) {
+        if (!iban.matches("[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}")) {
+            return false;
+        }
+
+        String rearranged = iban.substring(4) + iban.substring(0, 4);
+        int remainder = 0;
+        for (int i = 0; i < rearranged.length(); i++) {
+            char current = rearranged.charAt(i);
+            if (Character.isDigit(current)) {
+                remainder = (remainder * 10 + Character.digit(current, 10)) % 97;
+            } else if (current >= 'A' && current <= 'Z') {
+                int converted = current - 'A' + 10;
+                remainder = (remainder * 10 + converted / 10) % 97;
+                remainder = (remainder * 10 + converted % 10) % 97;
+            } else {
+                return false;
+            }
+        }
+        return remainder == 1;
     }
 
     @Override
