@@ -20,11 +20,11 @@ public class IBAN {
 
     public static IBAN of(String value) {
         if (value == null || value.trim().isEmpty()) {
-            throw new IllegalArgumentException("IBAN cannot be empty");
+            throw new IllegalArgumentException("Numer IBAN nie może być pusty");
         }
         String normalized = value.replaceAll("\\s+", "").toUpperCase();
         if (!isValid(normalized)) {
-            throw new IllegalArgumentException("Invalid IBAN");
+            throw new IllegalArgumentException("Niepoprawny numer IBAN");
         }
         return new IBAN(normalized);
     }

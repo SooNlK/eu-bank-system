@@ -188,7 +188,6 @@ export default function InternalTransferPanel({ onClose }) {
                             type="text"
                             value={toIban}
                             onChange={(e) => setToIban(e.target.value)}
-                            placeholder="DE89 3704 0044 0532 0130 00"
                             className={`${inputClass} font-mono uppercase`}
                             autoComplete="off"
                             required
@@ -241,7 +240,6 @@ export default function InternalTransferPanel({ onClose }) {
                             type="text"
                             value={note}
                             onChange={(e) => setNote(e.target.value)}
-                            placeholder="np. zasilenie konta"
                             maxLength={140}
                             className={inputClass}
                         />

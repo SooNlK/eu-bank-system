@@ -1,5 +1,5 @@
-export default function TransactionList({ transactions = [], loading }) {
-    
+export default function TransactionList({ transactions = [], loading, onSelect }) {
+
     if (loading) {
         return (
             <div className="bg-white rounded-2xl border border-slate-200/70 p-4">
@@ -7,9 +7,9 @@ export default function TransactionList({ transactions = [], loading }) {
                     <p className="text-[13px] font-medium text-slate-800">Ostatnie transakcje</p>
                 </div>
                 <div className="animate-pulse flex flex-col gap-3 mt-4">
-                    <div className="h-10 bg-slate-100 rounded"></div>
-                    <div className="h-10 bg-slate-100 rounded"></div>
-                    <div className="h-10 bg-slate-100 rounded"></div>
+                    <div className="h-10 bg-slate-100 rounded" />
+                    <div className="h-10 bg-slate-100 rounded" />
+                    <div className="h-10 bg-slate-100 rounded" />
                 </div>
             </div>
         )
@@ -61,13 +61,14 @@ export default function TransactionList({ transactions = [], loading }) {
                 mappedTransactions.map(({ id, iconBg, icon, name, badge, date, amount, amountColor }) => (
                     <div
                         key={id}
-                        className="flex items-center gap-3 py-2.5 border-b border-slate-100 last:border-b-0"
+                        onClick={() => onSelect?.(id)}
+                        className="flex items-center gap-3 py-2.5 border-b border-slate-100 last:border-b-0 cursor-pointer rounded-xl px-2 -mx-2 hover:bg-slate-50 transition-colors duration-100 group"
                     >
                         <div className={`w-9 h-9 ${iconBg} rounded-[10px] flex items-center justify-center shrink-0`}>
                             {icon}
                         </div>
                         <div className="flex-1 min-w-0">
-                            <p className="text-[12px] font-medium text-slate-800 truncate">{name}</p>
+                            <p className="text-[12px] font-medium text-slate-800 truncate group-hover:text-blue-600 transition-colors">{name}</p>
                             <div className="flex items-center gap-1.5 mt-px">
                                 <span className={`inline-flex items-center text-[10px] font-medium rounded-[5px] px-1.5 py-0.5 ${badge.className}`}>
                                     {badge.label}
@@ -75,7 +76,12 @@ export default function TransactionList({ transactions = [], loading }) {
                                 <span className="text-[10px] text-slate-400">{date}</span>
                             </div>
                         </div>
-                        <span className={`text-[13px] font-medium ${amountColor}`}>{amount}</span>
+                        <div className="flex items-center gap-1.5">
+                            <span className={`text-[13px] font-medium ${amountColor}`}>{amount}</span>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-slate-300 group-hover:text-slate-400 transition-colors">
+                                <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                        </div>
                     </div>
                 ))
             ) : (

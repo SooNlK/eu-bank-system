@@ -56,7 +56,7 @@ public class TransferService {
         String currency = validateCurrency(request.currency());
 
         Account toAccount = accountRepository.findByAccountNumber_Value(targetIban)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Target account is not in this bank"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Rachunek odbiorcy nie istnieje w tym banku"));
 
         Transfer transfer = Transfer.builder()
                 .fromAccount(fromAccount)
@@ -92,16 +92,16 @@ public class TransferService {
     public TransferResponse getById(UUID transferId, String email) {
         return transferRepository.findVisibleToCustomer(transferId, email)
                 .map(this::mapToResponse)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transfer not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Nie znaleziono przelewu"));
     }
 
     @Transactional
     public TransferResponse approve(UUID transferId) {
         Transfer transfer = transferRepository.findById(transferId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transfer not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Nie znaleziono przelewu"));
 
         if (transfer.getStatus() != TransferStatus.PENDING_APPROVAL) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Transfer is not waiting for approval");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Przelew nie oczekuje na zatwierdzenie");
         }
 
         transfer.setApprovedAt(LocalDateTime.now());
@@ -112,10 +112,10 @@ public class TransferService {
     @Transactional
     public TransferResponse reject(UUID transferId) {
         Transfer transfer = transferRepository.findById(transferId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transfer not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Nie znaleziono przelewu"));
 
         if (transfer.getStatus() == TransferStatus.COMPLETED || transfer.getStatus() == TransferStatus.FAILED) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Transfer is already processed");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Przelew został już przetworzony");
         }
 
         transfer.setStatus(TransferStatus.REJECTED);
@@ -165,24 +165,24 @@ public class TransferService {
             throw ex;
         } catch (RuntimeException ex) {
             transfer.setStatus(TransferStatus.FAILED);
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Transfer failed");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Przelew nie powiódł się");
         }
     }
 
     private void validateInternalTransfer(Transfer transfer) {
         if (transfer.getChannel() != TransferChannel.INTERNAL) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only internal transfers are supported");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Obsługiwane są wyłącznie przelewy wewnętrzne");
         }
         if (transfer.getFromAccount().getId().equals(transfer.getToAccount().getId())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Source and target accounts must be different");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Rachunek źródłowy i docelowy muszą być różne");
         }
         if (transfer.getFromAccount().getStatus() != AccountStatus.ACTIVE
                 || transfer.getToAccount().getStatus() != AccountStatus.ACTIVE) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Both accounts must be active");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Oba rachunki muszą być aktywne");
         }
         if (!transfer.getFromAccount().getBalance().getCurrency().equals(transfer.getAmount().getCurrency())
                 || !transfer.getToAccount().getBalance().getCurrency().equals(transfer.getAmount().getCurrency())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Transfer currency must match both accounts");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Waluta przelewu musi być zgodna z walutą obu rachunków");
         }
     }
 
@@ -199,10 +199,10 @@ public class TransferService {
         LocalDate valueDate = requestedValueDate == null ? today : requestedValueDate;
 
         if (valueDate.isBefore(today)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Value date cannot be in the past");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Data waluty nie może być z przeszłości");
         }
         if (channel == TransferChannel.INTERNAL && !valueDate.equals(today)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Internal transfer value date must be today");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Data waluty dla przelewu wewnętrznego musi być dzisiejsza");
         }
         return valueDate;
     }
@@ -210,7 +210,7 @@ public class TransferService {
     private String validateCurrency(String currency) {
         String normalized = currency == null ? "" : currency.trim().toUpperCase();
         if (!normalized.matches("[A-Z]{3}")) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Currency must be a 3-letter ISO code");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Waluta musi być 3-literowym kodem ISO");
         }
         return normalized;
     }

@@ -38,6 +38,16 @@ export async function getAccountTransactions(accountId) {
     return response.json()
 }
 
+export async function getTransactionDetails(accountId, transactionId) {
+    const response = await fetch(`/api/accounts/${accountId}/transactions/${transactionId}`, {
+        headers: getHeaders(),
+    })
+    if (!response.ok) {
+        throw new Error("Failed to fetch transaction details")
+    }
+    return response.json()
+}
+
 async function readError(response) {
     try {
         const body = await response.json()

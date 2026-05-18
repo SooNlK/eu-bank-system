@@ -39,12 +39,7 @@ export default function BalanceCard({ accounts = [], loading }) {
     const formattedTotal = new Intl.NumberFormat('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(totalBalance);
     const [intPart, fracPart] = formattedTotal.split(',');
 
-    // Map accounts for smaller cards
-    const accountCards = accounts.map(acc => ({
-        label: acc.type === 'STANDARD' ? 'Rachunek główny' : acc.type,
-        value: formatCurrency(acc.balance, acc.currency),
-        id: acc.id
-    }));
+
 
     if (loading) {
         return (
@@ -118,30 +113,6 @@ export default function BalanceCard({ accounts = [], loading }) {
                 </div>
             )}
 
-            <div className="grid grid-cols-3 gap-2 mt-auto">
-                {accountCards.map(({ label, value, id }) => {
-                    const isSelected = selectedId === id;
-                    return (
-                        <button
-                            key={id}
-                            onClick={() => setSelectedId(id)}
-                            className={`text-left border border-solid p-2.5 rounded-[10px] transition-all duration-200 cursor-pointer w-full bg-white/5 ${
-                                isSelected 
-                                ? 'border-white/30 bg-white/15 shadow-inner scale-[1.02]' 
-                                : 'border-transparent hover:bg-white/10'
-                            }`}
-                        >
-                            <p className="text-white/50 text-[10px] mb-0.5 whitespace-nowrap overflow-hidden text-ellipsis">{label}</p>
-                            <p className="text-white text-[14px] font-medium whitespace-nowrap overflow-hidden text-ellipsis">{value}</p>
-                        </button>
-                    );
-                })}
-                {accountCards.length === 0 && (
-                     <div className="bg-white/10 rounded-[10px] p-2.5 col-span-3 text-center">
-                         <p className="text-white/50 text-[12px]">Brak rachunków</p>
-                     </div>
-                )}
-            </div>
         </div>
     )
 }
