@@ -52,7 +52,7 @@ const inputClass =
     'w-full text-[12px] border border-slate-200 rounded-[9px] px-3 py-2 text-slate-800 bg-slate-50 outline-none focus:border-blue-400 transition-colors disabled:text-slate-400 disabled:cursor-not-allowed'
 const labelClass = 'text-[11px] text-slate-500 font-medium mb-1.5 block'
 
-export default function InternalTransferPanel({ onClose }) {
+export default function InternalTransferPanel({ onClose, onDashboardReturn }) {
     const [accounts, setAccounts] = useState([])
     const [fromId, setFromId] = useState('')
     const [toIban, setToIban] = useState('')
@@ -134,12 +134,25 @@ export default function InternalTransferPanel({ onClose }) {
                     Status: <strong>{transfer.status}</strong>. Kwota:{' '}
                     <strong>{formatCurrency(transfer.amount, transfer.currency)}</strong>.
                 </p>
-                <button
-                    onClick={onClose}
-                    className="mt-2 bg-blue-600 text-white border-none rounded-[9px] px-6 py-2 text-[13px] font-medium cursor-pointer hover:bg-blue-700 transition-colors"
-                >
-                    Zamknij
-                </button>
+                <div className="flex gap-3 mt-4 w-full px-4 sm:px-0 sm:w-auto">
+                    <button
+                        onClick={() => {
+                            setToIban('');
+                            setAmount('');
+                            setNote('');
+                            setTransfer(null);
+                        }}
+                        className="flex-1 sm:flex-none bg-slate-100 text-slate-700 border-none rounded-[9px] px-5 py-2.5 sm:py-2 text-[13px] font-medium cursor-pointer hover:bg-slate-200 transition-colors"
+                    >
+                        Nowy przelew
+                    </button>
+                    <button
+                        onClick={onDashboardReturn || onClose}
+                        className="flex-1 sm:flex-none bg-blue-600 text-white border-none rounded-[9px] px-5 py-2.5 sm:py-2 text-[13px] font-medium cursor-pointer hover:bg-blue-700 transition-colors shadow-sm"
+                    >
+                        Wróć do pulpitu
+                    </button>
+                </div>
             </div>
         )
     }

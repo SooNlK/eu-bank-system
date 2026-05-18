@@ -1,4 +1,7 @@
+import { useState } from 'react';
+
 export default function TransactionList({ transactions = [], loading, onSelect }) {
+    const [showAll, setShowAll] = useState(false);
 
     if (loading) {
         return (
@@ -50,15 +53,24 @@ export default function TransactionList({ transactions = [], loading, onSelect }
         };
     });
 
+    const transactionsToShow = showAll ? mappedTransactions : mappedTransactions.slice(0, 4);
+
     return (
         <div className="bg-white rounded-2xl border border-slate-200/70 p-4">
             <div className="flex items-center justify-between mb-3.5">
                 <p className="text-[13px] font-medium text-slate-800">Ostatnie transakcje</p>
-                <span className="text-[11px] text-blue-600 cursor-pointer">Wszystkie</span>
+                {mappedTransactions.length > 4 && (
+                    <button 
+                        onClick={() => setShowAll(!showAll)}
+                        className="text-[11px] font-medium text-blue-600 hover:text-blue-700 bg-transparent border-none cursor-pointer p-0"
+                    >
+                        {showAll ? 'Zwiń' : 'Wszystkie'}
+                    </button>
+                )}
             </div>
 
-            {mappedTransactions.length > 0 ? (
-                mappedTransactions.map(({ id, iconBg, icon, name, badge, date, amount, amountColor }) => (
+            {transactionsToShow.length > 0 ? (
+                transactionsToShow.map(({ id, iconBg, icon, name, badge, date, amount, amountColor }) => (
                     <div
                         key={id}
                         onClick={() => onSelect?.(id)}
