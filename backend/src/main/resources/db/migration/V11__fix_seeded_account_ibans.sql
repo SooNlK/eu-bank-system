@@ -1,0 +1,7 @@
+UPDATE accounts
+SET account_number = 'DE89370400440532013000'
+WHERE account_number = 'DE89100110010123456789';
+
+UPDATE accounts
+SET account_number = 'DE12500105170648489890'
+WHERE account_number = 'DE50200300400556677889';
