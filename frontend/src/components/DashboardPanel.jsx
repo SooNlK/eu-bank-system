@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import BalanceCard from './BalanceCard'
 import QuickActions from './QuickActions'
 import TransactionList from './TransactionList'
+import TransactionDetailModal from './TransactionDetailModal'
 import { getMyAccounts, getAccountTransactions } from '../services/account'
 
 function formatEur(amount) {
@@ -12,6 +13,8 @@ export default function DashboardPanel({ onNewTransfer }) {
     const [accounts, setAccounts] = useState([])
     const [transactions, setTransactions] = useState([])
     const [loading, setLoading] = useState(true)
+    const [mainAccountId, setMainAccountId] = useState(null)
+    const [selectedTxId, setSelectedTxId] = useState(null)
 
     useEffect(() => {
         async function loadData() {
@@ -21,6 +24,7 @@ export default function DashboardPanel({ onNewTransfer }) {
 
                 if (accs.length > 0) {
                     const mainAccountId = accs[0].id
+                    setMainAccountId(mainAccountId)
                     const trans = await getAccountTransactions(mainAccountId)
                     setTransactions(trans)
                 }
@@ -79,30 +83,45 @@ export default function DashboardPanel({ onNewTransfer }) {
     ]
 
     return (
-        <div className="flex flex-col gap-4">
-            {/* Statystyki */}
-            <div className="grid grid-cols-3 gap-3">
-                {STATS.map(({ label, value, positive, icon, iconBg }) => (
-                    <div key={label} className="bg-white rounded-2xl border border-slate-200/70 p-4 flex items-center gap-3">
-                        <div className={`w-10 h-10 ${iconBg} rounded-[10px] flex items-center justify-center shrink-0`}>
-                            {icon}
+        <>
+            <div className="flex flex-col gap-4">
+                {/* Statystyki */}
+                <div className="grid grid-cols-3 gap-3">
+                    {STATS.map(({ label, value, positive, icon, iconBg }) => (
+                        <div key={label} className="bg-white rounded-2xl border border-slate-200/70 p-4 flex items-center gap-3">
+                            <div className={`w-10 h-10 ${iconBg} rounded-[10px] flex items-center justify-center shrink-0`}>
+                                {icon}
+                            </div>
+                            <div>
+                                <p className="text-[11px] text-slate-500">{label}</p>
+                                <p className={`text-[15px] font-semibold ${positive ? 'text-green-700' : 'text-red-600'}`}>{value}</p>
+                            </div>
                         </div>
-                        <div>
-                            <p className="text-[11px] text-slate-500">{label}</p>
-                            <p className={`text-[15px] font-semibold ${positive ? 'text-green-700' : 'text-red-600'}`}>{value}</p>
-                        </div>
-                    </div>
-                ))}
+                    ))}
+                </div>
+
+                {/* Saldo + szybkie akcje */}
+                <div className="grid grid-cols-[2fr_1fr] gap-4">
+                    <BalanceCard accounts={accounts} loading={loading} />
+                    <QuickActions onNewTransfer={onNewTransfer} />
+                </div>
+
+                {/* Ostatnie transakcje */}
+                <TransactionList
+                    transactions={transactions}
+                    loading={loading}
+                    onSelect={(txId) => setSelectedTxId(txId)}
+                />
             </div>
 
-            {/* Saldo + szybkie akcje */}
-            <div className="grid grid-cols-[2fr_1fr] gap-4">
-                <BalanceCard accounts={accounts} loading={loading} />
-                <QuickActions onNewTransfer={onNewTransfer} />
-            </div>
-
-            {/* Ostatnie transakcje */}
-            <TransactionList transactions={transactions} loading={loading} />
-        </div>
+            {/* Modal szczegółów transakcji */}
+            {selectedTxId && mainAccountId && (
+                <TransactionDetailModal
+                    accountId={mainAccountId}
+                    transactionId={selectedTxId}
+                    onClose={() => setSelectedTxId(null)}
+                />
+            )}
+        </>
     )
 }

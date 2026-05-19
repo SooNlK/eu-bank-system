@@ -91,4 +91,21 @@ public class AccountController {
             Authentication authentication) {
         return ResponseEntity.ok(transactionService.getTransactionsForAccount(accountId, authentication.getName()));
     }
+
+    @GetMapping("/{accountId}/transactions/{transactionId}")
+    @Operation(summary = "Szczegóły transakcji",
+            description = "Zwraca szczegóły pojedynczej transakcji dla wybranego rachunku.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Szczegóły transakcji",
+                    content = @Content(schema = @Schema(implementation = TransactionResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Transakcja nie istnieje", content = @Content),
+            @ApiResponse(responseCode = "403", description = "Brak dostępu", content = @Content),
+            @ApiResponse(responseCode = "401", description = "Brak autoryzacji", content = @Content)
+    })
+    public ResponseEntity<TransactionResponse> getTransaction(
+            @Parameter(description = "UUID rachunku") @PathVariable UUID accountId,
+            @Parameter(description = "UUID transakcji") @PathVariable UUID transactionId,
+            Authentication authentication) {
+        return ResponseEntity.ok(transactionService.getTransaction(accountId, transactionId, authentication.getName()));
+    }
 }

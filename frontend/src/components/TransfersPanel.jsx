@@ -114,9 +114,9 @@ export default function TransfersPanel({ initialType = null, onTypeChange }) {
             {activeForm && (
                 <div>
                     {activeForm === 'internal' ? (
-                        <InternalTransferPanel onClose={handleClose} />
+                        <InternalTransferPanel onClose={handleClose} onDashboardReturn={() => onTypeChange && onTypeChange('dashboard')} />
                     ) : (
-                        <TransferPanel initialType={activeForm} onClose={handleClose} />
+                        <TransferPanel initialType={activeForm} onClose={handleClose} onDashboardReturn={() => onTypeChange && onTypeChange('dashboard')} />
                     )}
                 </div>
             )}

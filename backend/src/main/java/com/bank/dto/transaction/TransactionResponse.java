@@ -17,5 +17,7 @@ public record TransactionResponse(
         @Schema(description = "Status transakcji") TransactionStatus status,
         @Schema(description = "Opis transakcji") String description,
         @Schema(description = "ID referencyjne") String referenceId,
-        @Schema(description = "Data transakcji") LocalDateTime createdAt
+        @Schema(description = "Data transakcji") LocalDateTime createdAt,
+        @Schema(description = "Nazwa drugiej strony") String counterpartyName,
+        @Schema(description = "IBAN drugiej strony") String counterpartyIban
 ) {}

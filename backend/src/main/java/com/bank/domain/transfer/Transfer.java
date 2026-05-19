@@ -7,6 +7,7 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -55,6 +56,9 @@ public class Transfer extends AbstractAggregateRoot<Transfer> {
 
     @Column(length = 255)
     private String description;
+
+    @Column(name = "value_date", nullable = false)
+    private LocalDate valueDate;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

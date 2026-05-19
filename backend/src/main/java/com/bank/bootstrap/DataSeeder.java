@@ -6,6 +6,7 @@ import com.bank.domain.account.AccountType;
 import com.bank.domain.customer.Customer;
 import com.bank.domain.customer.CustomerStatus;
 import com.bank.domain.shared.AccountNumber;
+import com.bank.domain.shared.IBAN;
 import com.bank.domain.shared.Money;
 import com.bank.domain.transaction.Transaction;
 import com.bank.domain.transaction.TransactionStatus;
@@ -69,7 +70,7 @@ public class DataSeeder implements CommandLineRunner {
         // 2. Create Accounts for Hans (DE IBANs, EUR currency)
         Account hansAccount1 = Account.builder()
                 .customer(hans)
-                .accountNumber(AccountNumber.of("DE89100110010123456789"))
+                .accountNumber(validAccountNumber("DE89370400440532013000"))
                 .type(AccountType.STANDARD)
                 .balance(Money.of(new BigDecimal("2500.00"), "EUR"))
                 .reservedBalance(Money.of(BigDecimal.ZERO, "EUR"))
@@ -79,7 +80,7 @@ public class DataSeeder implements CommandLineRunner {
         // 3. Create Account for Erika
         Account erikaAccount1 = Account.builder()
                 .customer(erika)
-                .accountNumber(AccountNumber.of("DE50200300400556677889"))
+                .accountNumber(validAccountNumber("DE12500105170648489890"))
                 .type(AccountType.STANDARD)
                 .balance(Money.of(new BigDecimal("3200.50"), "EUR"))
                 .reservedBalance(Money.of(BigDecimal.ZERO, "EUR"))
@@ -136,11 +137,16 @@ public class DataSeeder implements CommandLineRunner {
                 .channel(com.bank.domain.transfer.TransferChannel.SEPA)
                 .status(com.bank.domain.transfer.TransferStatus.COMPLETED)
                 .description("Miete Anteil (Rent share)")
+                .valueDate(LocalDate.now())
                 .completedAt(LocalDateTime.now())
                 .build();
 
         transferRepository.save(transfer);
 
         log.info("European data seeding completed successfully.");
+    }
+
+    private AccountNumber validAccountNumber(String iban) {
+        return AccountNumber.of(IBAN.of(iban).getValue());
     }
 }
