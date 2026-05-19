@@ -17,5 +17,7 @@ public record AccountResponse(
         @Schema(description = "Zablokowane środki") BigDecimal reservedBalance,
         @Schema(description = "Waluta", example = "EUR") String currency,
         @Schema(description = "Status rachunku") AccountStatus status,
-        @Schema(description = "Data otwarcia rachunku") LocalDateTime createdAt
+        @Schema(description = "Data otwarcia rachunku") LocalDateTime createdAt,
+        @Schema(description = "UUID rachunku nadrzędnego (dla JUNIOR)") UUID parentAccountId,
+        @Schema(description = "Imię i nazwisko właściciela", example = "Jan Kowalski") String ownerName
 ) {}

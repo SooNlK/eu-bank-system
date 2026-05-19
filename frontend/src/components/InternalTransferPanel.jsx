@@ -114,26 +114,54 @@ export default function InternalTransferPanel({ onClose, onDashboardReturn }) {
 
     if (transfer) {
         const completed = transfer.status === 'COMPLETED'
+        const pendingApproval = transfer.status === 'PENDING_APPROVAL'
+
+        let statusBg = 'bg-red-50'
+        let statusStroke = '#dc2626'
+        let statusTitle = 'Przelew nie został wykonany'
+        
+        if (completed) {
+            statusBg = 'bg-green-50'
+            statusStroke = '#16a34a'
+            statusTitle = 'Przelew wykonany'
+        } else if (pendingApproval) {
+            statusBg = 'bg-amber-50'
+            statusStroke = '#d97706'
+            statusTitle = 'Oczekiwanie na zatwierdzenie 🧸'
+        }
 
         return (
             <div className="bg-white rounded-2xl border border-slate-200/70 p-5 mb-4 flex flex-col items-center justify-center gap-3 py-10">
-                <div className={`w-14 h-14 ${completed ? 'bg-green-50' : 'bg-red-50'} rounded-full flex items-center justify-center mb-1`}>
+                <div className={`w-14 h-14 ${statusBg} rounded-full flex items-center justify-center mb-1`}>
                     <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                        <circle cx="12" cy="12" r="10" stroke={completed ? '#16a34a' : '#dc2626'} strokeWidth="1.8" />
-                        {completed ? (
+                        <circle cx="12" cy="12" r="10" stroke={statusStroke} strokeWidth="1.8" />
+                        {completed && (
                             <path d="M7.5 12l3 3 6-6" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        ) : (
+                        )}
+                        {pendingApproval && (
+                            <path d="M12 8v4m0 4h.01" stroke="#d97706" strokeWidth="2" strokeLinecap="round" />
+                        )}
+                        {!completed && !pendingApproval && (
                             <path d="M8 8l8 8M16 8l-8 8" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" />
                         )}
                     </svg>
                 </div>
                 <p className="text-[15px] font-semibold text-slate-800">
-                    {completed ? 'Przelew wykonany' : 'Przelew nie został wykonany'}
+                    {statusTitle}
                 </p>
-                <p className="text-[12px] text-slate-500 text-center max-w-[280px]">
-                    Status: <strong>{transfer.status}</strong>. Kwota:{' '}
-                    <strong>{formatCurrency(transfer.amount, transfer.currency)}</strong>.
-                </p>
+                <div className="text-[12px] text-slate-500 text-center max-w-[280px]">
+                    {pendingApproval ? (
+                        <p className="leading-relaxed">
+                            Przelew oczekuje na zatwierdzenie przez rodzica! 🧸📱<br />
+                            Kwota: <strong className="text-slate-800">{formatCurrency(transfer.amount, transfer.currency)}</strong>.
+                        </p>
+                    ) : (
+                        <p className="leading-relaxed">
+                            Status: <strong>{transfer.status}</strong>. Kwota:{' '}
+                            <strong>{formatCurrency(transfer.amount, transfer.currency)}</strong>.
+                        </p>
+                    )}
+                </div>
                 <div className="flex gap-3 mt-4 w-full px-4 sm:px-0 sm:w-auto">
                     <button
                         onClick={() => {
@@ -148,7 +176,8 @@ export default function InternalTransferPanel({ onClose, onDashboardReturn }) {
                     </button>
                     <button
                         onClick={onDashboardReturn || onClose}
-                        className="flex-1 sm:flex-none bg-blue-600 text-white border-none rounded-[9px] px-5 py-2.5 sm:py-2 text-[13px] font-medium cursor-pointer hover:bg-blue-700 transition-colors shadow-sm"
+                        className={`flex-1 sm:flex-none text-white border-none rounded-[9px] px-5 py-2.5 sm:py-2 text-[13px] font-medium cursor-pointer transition-colors shadow-sm
+                            ${pendingApproval ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700'}`}
                     >
                         Wróć do pulpitu
                     </button>

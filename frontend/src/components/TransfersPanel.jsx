@@ -62,8 +62,12 @@ const TRANSFER_TYPES = [
 
 const RECENT_TRANSFERS = []
 
-export default function TransfersPanel({ initialType = null, onTypeChange }) {
-    const [activeForm, setActiveForm] = useState(initialType)
+export default function TransfersPanel({ initialType = null, onTypeChange, isJunior }) {
+    const [activeForm, setActiveForm] = useState(isJunior ? 'internal' : initialType)
+
+    const visibleTypes = isJunior 
+        ? TRANSFER_TYPES.filter(t => t.id === 'internal')
+        : TRANSFER_TYPES
 
     const handleSelect = (id) => {
         setActiveForm(id)
@@ -71,8 +75,13 @@ export default function TransfersPanel({ initialType = null, onTypeChange }) {
     }
 
     const handleClose = () => {
-        setActiveForm(null)
-        if (onTypeChange) onTypeChange('transfers')
+        if (isJunior) {
+            // A child user closing the form returns to dashboard
+            if (onTypeChange) onTypeChange('dashboard')
+        } else {
+            setActiveForm(null)
+            if (onTypeChange) onTypeChange('transfers')
+        }
     }
 
     return (
@@ -87,7 +96,7 @@ export default function TransfersPanel({ initialType = null, onTypeChange }) {
 
             {/* Kafelki typów przelewów */}
             <div className="grid grid-cols-2 gap-3">
-                {TRANSFER_TYPES.map(({ id, label, subtitle, iconBg, icon, description }) => (
+                {visibleTypes.map(({ id, label, subtitle, iconBg, icon, description }) => (
                     <button
                         key={id}
                         type="button"

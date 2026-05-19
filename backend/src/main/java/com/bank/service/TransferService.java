@@ -2,6 +2,7 @@ package com.bank.service;
 
 import com.bank.domain.account.Account;
 import com.bank.domain.account.AccountStatus;
+import com.bank.domain.customer.Customer;
 import com.bank.domain.shared.IBAN;
 import com.bank.domain.shared.Money;
 import com.bank.domain.transaction.Transaction;
@@ -35,17 +36,20 @@ public class TransferService {
     private final AccountRepository accountRepository;
     private final TransactionRepository transactionRepository;
     private final AccountService accountService;
+    private final com.bank.repository.CustomerRepository customerRepository;
 
     public TransferService(
             TransferRepository transferRepository,
             AccountRepository accountRepository,
             TransactionRepository transactionRepository,
-            AccountService accountService
+            AccountService accountService,
+            com.bank.repository.CustomerRepository customerRepository
     ) {
         this.transferRepository = transferRepository;
         this.accountRepository = accountRepository;
         this.transactionRepository = transactionRepository;
         this.accountService = accountService;
+        this.customerRepository = customerRepository;
     }
 
     @Transactional
@@ -58,6 +62,9 @@ public class TransferService {
         Account toAccount = accountRepository.findByAccountNumber_Value(targetIban)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Rachunek odbiorcy nie istnieje w tym banku"));
 
+        boolean requiresApproval = (request.amount().compareTo(APPROVAL_LIMIT) > 0) ||
+                                   (fromAccount.getType() == com.bank.domain.account.AccountType.JUNIOR);
+
         Transfer transfer = Transfer.builder()
                 .fromAccount(fromAccount)
                 .toAccount(toAccount)
@@ -66,7 +73,7 @@ public class TransferService {
                 .status(TransferStatus.PENDING)
                 .description(request.description())
                 .valueDate(valueDate)
-                .requiresApproval(request.amount().compareTo(APPROVAL_LIMIT) > 0)
+                .requiresApproval(requiresApproval)
                 .build();
 
         validateInternalTransfer(transfer);
@@ -74,6 +81,7 @@ public class TransferService {
 
         if (transfer.isRequiresApproval()) {
             transfer.setStatus(TransferStatus.PENDING_APPROVAL);
+            transfer = transferRepository.save(transfer);
             return mapToResponse(transfer);
         }
 
@@ -96,12 +104,24 @@ public class TransferService {
     }
 
     @Transactional
-    public TransferResponse approve(UUID transferId) {
+    public TransferResponse approve(UUID transferId, String email) {
         Transfer transfer = transferRepository.findById(transferId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Nie znaleziono przelewu"));
 
         if (transfer.getStatus() != TransferStatus.PENDING_APPROVAL) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Przelew nie oczekuje na zatwierdzenie");
+        }
+
+        Customer currentUser = customerRepository.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Nie znaleziono użytkownika"));
+
+        if (transfer.getFromAccount().getType() == com.bank.domain.account.AccountType.JUNIOR) {
+            Account juniorAccount = transfer.getFromAccount();
+            Account parentAccount = juniorAccount.getParentAccount();
+            if (parentAccount == null || !parentAccount.getCustomer().getId().equals(currentUser.getId())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Brak uprawnień do zatwierdzenia tego przelewu");
+            }
+            transfer.setApprovedBy(currentUser);
         }
 
         transfer.setApprovedAt(LocalDateTime.now());
@@ -110,17 +130,42 @@ public class TransferService {
     }
 
     @Transactional
-    public TransferResponse reject(UUID transferId) {
+    public TransferResponse reject(UUID transferId, String email) {
         Transfer transfer = transferRepository.findById(transferId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Nie znaleziono przelewu"));
 
-        if (transfer.getStatus() == TransferStatus.COMPLETED || transfer.getStatus() == TransferStatus.FAILED) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Przelew został już przetworzony");
+        if (transfer.getStatus() != TransferStatus.PENDING_APPROVAL) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Przelew nie oczekuje na zatwierdzenie");
+        }
+
+        Customer currentUser = customerRepository.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Nie znaleziono użytkownika"));
+
+        if (transfer.getFromAccount().getType() == com.bank.domain.account.AccountType.JUNIOR) {
+            Account juniorAccount = transfer.getFromAccount();
+            Account parentAccount = juniorAccount.getParentAccount();
+            if (parentAccount == null || !parentAccount.getCustomer().getId().equals(currentUser.getId())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Brak uprawnień do odrzucenia tego przelewu");
+            }
         }
 
         transfer.setStatus(TransferStatus.REJECTED);
         transfer.setRejectedAt(LocalDateTime.now());
         return mapToResponse(transfer);
+    }
+
+    @Transactional(readOnly = true)
+    public List<TransferResponse> getPendingApprovalsForParent(String parentEmail) {
+        Customer parent = customerRepository.findByEmail(parentEmail)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Nie znaleziono użytkownika"));
+
+        return transferRepository.findAll().stream()
+                .filter(t -> t.getStatus() == TransferStatus.PENDING_APPROVAL &&
+                             t.getFromAccount().getType() == com.bank.domain.account.AccountType.JUNIOR &&
+                             t.getFromAccount().getParentAccount() != null &&
+                             t.getFromAccount().getParentAccount().getCustomer().getId().equals(parent.getId()))
+                .map(this::mapToResponse)
+                .toList();
     }
 
     private void processInternalTransfer(Transfer transfer) {

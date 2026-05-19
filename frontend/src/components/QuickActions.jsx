@@ -1,4 +1,4 @@
-export default function QuickActions({ onNewTransfer }) {
+export default function QuickActions({ onNewTransfer, isJunior }) {
     const actions = [
         {
             bg: 'bg-blue-50',
@@ -6,28 +6,13 @@ export default function QuickActions({ onNewTransfer }) {
             titleColor: 'text-blue-900',
             subtitleColor: 'text-blue-500',
             title: 'Nowy przelew',
-            subtitle: 'SEPA / Instant / TARGET',
+            subtitle: isJunior ? 'Przelew wewnętrzny 🚀' : 'SEPA / Instant / TARGET',
             icon: (
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                     <path d="M12 5v14M5 12l7-7 7 7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
             ),
             onClick: onNewTransfer,
-        },
-
-
-        {
-            bg: 'bg-purple-50',
-            iconBg: 'bg-purple-600',
-            titleColor: 'text-purple-900',
-            subtitleColor: 'text-purple-600',
-            title: 'Doładuj konto',
-            subtitle: 'Wpłata środków',
-            icon: (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                    <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" stroke="white" strokeWidth="2" strokeLinecap="round" />
-                </svg>
-            ),
         },
     ]
 

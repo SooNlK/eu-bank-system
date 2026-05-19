@@ -108,4 +108,22 @@ public class AccountController {
             Authentication authentication) {
         return ResponseEntity.ok(transactionService.getTransaction(accountId, transactionId, authentication.getName()));
     }
+
+    @PostMapping("/junior")
+    @Operation(summary = "Tworzenie nowego konta Junior przez rodzica",
+            description = "Zakłada konto Junior dla dziecka o wieku 7-13 lat. Wymaga autoryzacji rodzica.")
+    public ResponseEntity<AccountResponse> registerJunior(
+            @jakarta.validation.Valid @RequestBody com.bank.dto.account.RegisterJuniorRequest request,
+            Authentication authentication
+    ) {
+        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
+                .body(accountService.registerJuniorAccount(request, authentication.getName()));
+    }
+
+    @GetMapping("/junior")
+    @Operation(summary = "Pobieranie kont Junior powiązanych z rodzicem",
+            description = "Zwraca listę wszystkich kont Junior powiązanych z kontami zalogowanego rodzica.")
+    public ResponseEntity<List<AccountResponse>> getJuniors(Authentication authentication) {
+        return ResponseEntity.ok(accountService.getJuniorAccountsForParent(authentication.getName()));
+    }
 }

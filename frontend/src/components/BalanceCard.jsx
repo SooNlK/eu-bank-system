@@ -47,10 +47,12 @@ export default function BalanceCard({ accounts = [], loading }) {
         );
     }
 
+    const isJuniorCard = accounts.some(acc => acc.type === 'JUNIOR');
+
     return (
         <div
             className="rounded-[18px] p-6 relative overflow-hidden h-full flex flex-col justify-between"
-            style={{ background: '#1a3c8f' }}
+            style={{ background: isJuniorCard ? 'linear-gradient(135deg, #7c3aed 0%, #0d9488 100%)' : '#1a3c8f' }}
         >
             <div className="absolute -top-5 -right-5 w-[100px] h-[100px] rounded-full bg-white/[0.06]" />
             <div className="absolute -bottom-8 right-20 w-[70px] h-[70px] rounded-full bg-white/[0.04]" />
@@ -82,7 +84,7 @@ export default function BalanceCard({ accounts = [], loading }) {
                     <div className="min-w-0 flex-1 mr-3 text-left">
                         <div className="flex items-center gap-1.5 mb-1">
                             <span className="text-[10px] font-semibold text-white/60 uppercase tracking-[0.05em]">
-                                {selectedAccount.type === 'STANDARD' ? 'Rachunek główny' : selectedAccount.type}
+                                {selectedAccount.type === 'STANDARD' ? 'Rachunek główny' : (selectedAccount.type === 'JUNIOR' ? 'Konto Junior 🧸' : selectedAccount.type)}
                             </span>
                             <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
                             <span className="text-[9px] text-green-400 font-medium uppercase tracking-[0.02em]">Aktywne</span>
