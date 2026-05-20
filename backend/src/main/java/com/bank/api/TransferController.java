@@ -88,8 +88,9 @@ public class TransferController {
             @ApiResponse(responseCode = "401", description = "Brak autoryzacji", content = @Content)
     })
     public ResponseEntity<TransferResponse> approveTransfer(
-            @Parameter(description = "UUID przelewu") @PathVariable UUID transferId) {
-        return ResponseEntity.ok(transferService.approve(transferId));
+            @Parameter(description = "UUID przelewu") @PathVariable UUID transferId,
+            Authentication authentication) {
+        return ResponseEntity.ok(transferService.approve(transferId, authentication.getName()));
     }
 
     @PostMapping("/{transferId}/reject")
@@ -101,7 +102,15 @@ public class TransferController {
             @ApiResponse(responseCode = "401", description = "Brak autoryzacji", content = @Content)
     })
     public ResponseEntity<TransferResponse> rejectTransfer(
-            @Parameter(description = "UUID przelewu") @PathVariable UUID transferId) {
-        return ResponseEntity.ok(transferService.reject(transferId));
+            @Parameter(description = "UUID przelewu") @PathVariable UUID transferId,
+            Authentication authentication) {
+        return ResponseEntity.ok(transferService.reject(transferId, authentication.getName()));
+    }
+
+    @GetMapping("/pending-approval")
+    @Operation(summary = "Pobranie przelewów oczekujących na zatwierdzenie przez rodzica",
+            description = "Zwraca listę przelewów dzieci, które wymagają zatwierdzenia przez zalogowanego rodzica.")
+    public ResponseEntity<List<TransferResponse>> getPendingApprovals(Authentication authentication) {
+        return ResponseEntity.ok(transferService.getPendingApprovalsForParent(authentication.getName()));
     }
 }

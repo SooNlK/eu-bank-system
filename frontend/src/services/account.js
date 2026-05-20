@@ -77,3 +77,57 @@ export async function createInternalTransfer({ fromAccountId, toIban, amount, cu
     }
     return response.json()
 }
+
+export async function getJuniorAccounts() {
+    const response = await fetch("/api/accounts/junior", {
+        headers: getHeaders(),
+    })
+    if (!response.ok) {
+        throw new Error(await readError(response))
+    }
+    return response.json()
+}
+
+export async function createJuniorAccount(data) {
+    const response = await fetch("/api/accounts/junior", {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify(data),
+    })
+    if (!response.ok) {
+        throw new Error(await readError(response))
+    }
+    return response.json()
+}
+
+export async function getPendingApprovals() {
+    const response = await fetch("/api/transfers/pending-approval", {
+        headers: getHeaders(),
+    })
+    if (!response.ok) {
+        throw new Error(await readError(response))
+    }
+    return response.json()
+}
+
+export async function approveTransfer(transferId) {
+    const response = await fetch(`/api/transfers/${transferId}/approve`, {
+        method: "POST",
+        headers: getHeaders(),
+    })
+    if (!response.ok) {
+        throw new Error(await readError(response))
+    }
+    return response.json()
+}
+
+export async function rejectTransfer(transferId) {
+    const response = await fetch(`/api/transfers/${transferId}/reject`, {
+        method: "POST",
+        headers: getHeaders(),
+    })
+    if (!response.ok) {
+        throw new Error(await readError(response))
+    }
+    return response.json()
+}

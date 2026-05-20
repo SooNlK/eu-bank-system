@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import BalanceCard from './BalanceCard'
-import QuickActions from './QuickActions'
 import TransactionList from './TransactionList'
 import TransactionDetailModal from './TransactionDetailModal'
 import { getMyAccounts, getAccountTransactions } from '../services/account'
@@ -9,7 +8,7 @@ function formatEur(amount) {
     return `€ ${amount.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
-export default function DashboardPanel({ onNewTransfer }) {
+export default function DashboardPanel({ onNewTransfer, isJunior }) {
     const [accounts, setAccounts] = useState([])
     const [transactions, setTransactions] = useState([])
     const [loading, setLoading] = useState(true)
@@ -100,10 +99,9 @@ export default function DashboardPanel({ onNewTransfer }) {
                     ))}
                 </div>
 
-                {/* Saldo + szybkie akcje */}
-                <div className="grid grid-cols-[2fr_1fr] gap-4">
+                {/* Saldo */}
+                <div className="w-full">
                     <BalanceCard accounts={accounts} loading={loading} />
-                    <QuickActions onNewTransfer={onNewTransfer} />
                 </div>
 
                 {/* Ostatnie transakcje */}

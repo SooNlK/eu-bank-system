@@ -38,6 +38,9 @@ public class Customer {
     @Column(name = "passport_number", unique = true, nullable = false, length = 20)
     private String passportNumber;
 
+    @Column(name = "date_of_birth")
+    private java.time.LocalDate dateOfBirth;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private CustomerStatus status;
