@@ -1,5 +1,5 @@
 package com.bank.domain.card;
 
 public enum CardStatus {
-    ACTIVE, BLOCKED, EXPIRED
+    REQUESTED, PRODUCING, SHIPPED, ACTIVE, BLOCKED, EXPIRED, CANCELLED
 }

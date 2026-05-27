@@ -13,6 +13,8 @@ import java.util.UUID;
 public record CardResponse(
         @Schema(description = "UUID karty") UUID id,
         @Schema(description = "UUID powiązanego rachunku") UUID accountId,
+        @Schema(description = "Token karty w zewnętrznej sieci kartowej") String externalCardToken,
+        @Schema(description = "Zamaskowany numer karty", example = "4300 01** **** 7890") String maskedPan,
         @Schema(description = "Ostatnie 4 cyfry numeru karty", example = "4242") String last4,
         @Schema(description = "Typ karty") CardType type,
         @Schema(description = "Status karty") CardStatus status,

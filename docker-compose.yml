@@ -27,6 +27,9 @@ services:
       DB_URL: ${DB_URL}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
+      CARD_NETWORK_BASE_URL: ${CARD_NETWORK_BASE_URL:-http://host.docker.internal:8072}
+      CARD_NETWORK_API_KEY: ${CARD_NETWORK_API_KEY:-bank-key-eu-a}
+      CARD_NETWORK_HMAC_SECRET: ${CARD_NETWORK_HMAC_SECRET:-secret-eu-a-hmac}
     depends_on:
       db:
         condition: service_healthy

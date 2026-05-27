@@ -33,6 +33,10 @@ logging:
 app:
   jwt-secret: daf66e01593f61a15b857cf433aae03a005812b31234e149036bcc8dee755dbb
   jwt-expiration-milliseconds: 86400000
+  card-network:
+    base-url: ${CARD_NETWORK_BASE_URL:http://localhost:8072}
+    api-key: ${CARD_NETWORK_API_KEY:bank-key-eu-a}
+    hmac-secret: ${CARD_NETWORK_HMAC_SECRET:secret-eu-a-hmac}
 
 springdoc:
   api-docs:
