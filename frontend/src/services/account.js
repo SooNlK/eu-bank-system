@@ -186,3 +186,19 @@ export async function unblockCard(cardId) {
     }
     return response.json()
 }
+
+export async function updateCardLimits(cardId, dailyLimit, monthlyLimit) {
+    const response = await fetch(`/api/cards/${cardId}/limits`, {
+        method: "PATCH",
+        headers: getHeaders(),
+        body: JSON.stringify({
+            dailyLimit: Number(dailyLimit),
+            monthlyLimit: Number(monthlyLimit)
+        })
+    })
+    if (!response.ok) {
+        throw new Error(await readError(response))
+    }
+    return response.json()
+}
+

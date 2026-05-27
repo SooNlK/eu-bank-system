@@ -1,6 +1,7 @@
 package com.bank.service;
 
 import com.bank.client.cardnetwork.CardNetworkClient;
+import com.bank.client.cardnetwork.CardNetworkCardResponse;
 import com.bank.client.cardnetwork.CardNetworkIssueResponse;
 import com.bank.client.cardnetwork.CardNetworkStatusResponse;
 import com.bank.domain.account.Account;
@@ -47,17 +48,21 @@ public class CardService {
         this.cardNetworkClient = cardNetworkClient;
     }
 
+    @Transactional
     public List<CardResponse> getCardsForCurrentUser(String email) {
         Customer customer = customerRepository.findByEmail(email)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Klient nie został znaleziony."));
 
         return cardRepository.findAccessibleByCustomerId(customer.getId()).stream()
+                .peek(this::syncStatusFromCardNetwork)
                 .map(this::mapToResponse)
                 .toList();
     }
 
+    @Transactional
     public CardResponse getById(UUID cardId, String email) {
         Card card = getAccessibleCard(cardId, email);
+        syncStatusFromCardNetwork(card);
         return mapToResponse(card);
     }
 
@@ -133,6 +138,17 @@ public class CardService {
         Card card = getAccessibleCard(cardId, email);
         requireExternalToken(card);
 
+        syncStatusFromCardNetwork(card);
+        if (card.getStatus() == CardStatus.ACTIVE) {
+            return mapToResponse(card);
+        }
+        if (card.getType() == CardType.VIRTUAL) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Karta wirtualna aktywuje się automatycznie w module kart.");
+        }
+        if (card.getStatus() != CardStatus.SHIPPED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Kartę można aktywować dopiero po wysłaniu przez operatora kart.");
+        }
+
         callCardNetwork(() -> cardNetworkClient.activateCard(card.getExternalCardToken(), email));
         card.setStatus(CardStatus.ACTIVE);
         return mapToResponse(card);
@@ -168,6 +184,30 @@ public class CardService {
         }
     }
 
+    private void syncStatusFromCardNetwork(Card card) {
+        if (card.getExternalCardToken() == null) {
+            return;
+        }
+
+        try {
+            CardNetworkCardResponse response = cardNetworkClient.getCard(card.getExternalCardToken());
+            if (response == null || response.status() == null) {
+                return;
+            }
+            CardStatus externalStatus = CardStatus.valueOf(response.status());
+            if (card.getStatus() != externalStatus) {
+                card.setStatus(externalStatus);
+            }
+            if (response.maskedPan() != null && !response.maskedPan().isBlank()) {
+                card.setMaskedPan(response.maskedPan());
+                card.setLast4(extractLast4(null, response.maskedPan()));
+            }
+            card.setNetworkBalance(BigDecimal.valueOf(response.balance()));
+        } catch (Exception ignored) {
+            // Lokalna lista kart nadal ma działać, nawet gdy gateway kart jest chwilowo niedostępny.
+        }
+    }
+
     private void callCardNetwork(CardNetworkCall call) {
         try {
             CardNetworkStatusResponse response = call.execute();
@@ -198,6 +238,7 @@ public class CardService {
                 card.getExpiresAt(),
                 card.getDailyLimit() == null ? null : card.getDailyLimit().getAmount(),
                 card.getMonthlyLimit() == null ? null : card.getMonthlyLimit().getAmount(),
+                card.getNetworkBalance(),
                 card.getCreatedAt()
         );
     }

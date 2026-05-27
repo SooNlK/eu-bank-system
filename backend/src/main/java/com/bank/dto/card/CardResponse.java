@@ -21,5 +21,6 @@ public record CardResponse(
         @Schema(description = "Data ważności", example = "2028-12-31") LocalDate expiresAt,
         @Schema(description = "Dzienny limit transakcyjny") BigDecimal dailyLimit,
         @Schema(description = "Miesięczny limit transakcyjny") BigDecimal monthlyLimit,
+        @Schema(description = "Saldo karty (dla prepaid)") BigDecimal balance,
         @Schema(description = "Data wydania karty") LocalDateTime createdAt
 ) {}

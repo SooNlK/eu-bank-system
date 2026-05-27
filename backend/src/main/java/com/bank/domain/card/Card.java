@@ -68,4 +68,7 @@ public class Card extends AbstractAggregateRoot<Card> {
             @AttributeOverride(name = "currency", column = @Column(name = "currency", insertable = false, updatable = false))
     })
     private Money monthlyLimit;
+
+    @Transient
+    private BigDecimal networkBalance;
 }

@@ -116,19 +116,6 @@ public class DataSeeder implements CommandLineRunner {
 
         transactionRepository.saveAll(List.of(t1, t2, t3));
 
-        // 5. Create Cards
-        com.bank.domain.card.Card hansCard = com.bank.domain.card.Card.builder()
-                .account(hansAccount1)
-                .last4("8822")
-                .type(com.bank.domain.card.CardType.DEBIT)
-                .status(com.bank.domain.card.CardStatus.ACTIVE)
-                .expiresAt(LocalDate.now().plusYears(4))
-                .dailyLimit(Money.of(new BigDecimal("2000.00"), "EUR"))
-                .monthlyLimit(Money.of(new BigDecimal("10000.00"), "EUR"))
-                .build();
-
-        cardRepository.save(hansCard);
-
         // 6. Create SEPA Transfer
         com.bank.domain.transfer.Transfer transfer = com.bank.domain.transfer.Transfer.builder()
                 .fromAccount(hansAccount1)

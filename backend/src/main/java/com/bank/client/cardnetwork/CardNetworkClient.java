@@ -4,7 +4,6 @@ import com.bank.domain.card.CardType;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -75,6 +74,13 @@ public class CardNetworkClient {
                 .body(Map.of("activated_by", activatedBy))
                 .retrieve()
                 .body(CardNetworkStatusResponse.class);
+    }
+
+    public CardNetworkCardResponse getCard(String cardToken) {
+        return restClient.get()
+                .uri("/api/v1/cards/{token}", cardToken)
+                .retrieve()
+                .body(CardNetworkCardResponse.class);
     }
 
     private CardNetworkStatusResponse updateStatus(String cardToken, String status, String reason) {
