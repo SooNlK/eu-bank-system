@@ -4,6 +4,7 @@ import TopBar from './TopBar'
 import DashboardPanel from './DashboardPanel'
 import TransfersPanel from './TransfersPanel'
 import JuniorPanel from './JuniorPanel'
+import CardsPanel from './CardsPanel'
 import { getMyAccounts, getPendingApprovals } from '../services/account'
 
 const TRANSFER_NAV_IDS = ['sepa', 'instant', 'target', 'internal', 'transfers']
@@ -79,6 +80,10 @@ export default function Dashboard({ userEmail, onLogout }) {
     const renderContent = () => {
         if (activeNav === 'junior') {
             return <JuniorPanel />
+        }
+
+        if (activeNav === 'cards') {
+            return <CardsPanel />
         }
 
         if (TRANSFER_NAV_IDS.includes(activeNav)) {

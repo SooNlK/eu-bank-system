@@ -131,3 +131,58 @@ export async function rejectTransfer(transferId) {
     }
     return response.json()
 }
+
+export async function getCards() {
+    const response = await fetch("/api/cards", {
+        headers: getHeaders(),
+    })
+    if (!response.ok) {
+        throw new Error(await readError(response))
+    }
+    return response.json()
+}
+
+export async function issueCard(data) {
+    const response = await fetch("/api/cards", {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify(data),
+    })
+    if (!response.ok) {
+        throw new Error(await readError(response))
+    }
+    return response.json()
+}
+
+export async function activateCard(cardId) {
+    const response = await fetch(`/api/cards/${cardId}/activate`, {
+        method: "POST",
+        headers: getHeaders(),
+    })
+    if (!response.ok) {
+        throw new Error(await readError(response))
+    }
+    return response.json()
+}
+
+export async function blockCard(cardId) {
+    const response = await fetch(`/api/cards/${cardId}/block`, {
+        method: "POST",
+        headers: getHeaders(),
+    })
+    if (!response.ok) {
+        throw new Error(await readError(response))
+    }
+    return response.json()
+}
+
+export async function unblockCard(cardId) {
+    const response = await fetch(`/api/cards/${cardId}/unblock`, {
+        method: "POST",
+        headers: getHeaders(),
+    })
+    if (!response.ok) {
+        throw new Error(await readError(response))
+    }
+    return response.json()
+}

@@ -36,6 +36,9 @@ Endpointy banku:
 | `POST` | `/api/cards/{cardId}/block` | Blokada karty |
 | `POST` | `/api/cards/{cardId}/unblock` | Odblokowanie karty |
 | `PATCH` | `/api/cards/{cardId}/limits` | Lokalna aktualizacja limitów |
+| `POST` | `/api/v1/authorize` | Callback dla sieci kartowej: rezerwacja środków |
+| `POST` | `/api/v1/capture` | Callback dla sieci kartowej: finalne księgowanie płatności |
+| `POST` | `/api/v1/refund` | Callback dla sieci kartowej: zwrot płatności |
 
 Przykład wydania karty:
 
@@ -50,6 +53,18 @@ Przykład wydania karty:
 ```
 
 Pełny PAN i CVV są zwracane przez endpoint wydania karty tylko raz. Bank zapisuje lokalnie wyłącznie token, zamaskowany PAN, ostatnie 4 cyfry i status.
+
+Przykład autoryzacji wywoływanej przez moduł kart:
+
+```json
+{
+  "account_id": "uuid-rachunku",
+  "amount": 150.00,
+  "currency": "EUR",
+  "transaction_id": "uuid-transakcji-z-sieci-kartowej",
+  "merchant_name": "Sklep testowy"
+}
+```
 
 
 ## Struktura Bazy Danych 
