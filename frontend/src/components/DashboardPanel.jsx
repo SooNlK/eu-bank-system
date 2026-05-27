@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import BalanceCard from './BalanceCard'
 import TransactionList from './TransactionList'
 import TransactionDetailModal from './TransactionDetailModal'
-import { getMyAccounts, getAccountTransactions } from '../services/account'
+import { getMyAccounts, getAccountTransactions, getTransfers } from '../services/account'
 
 function formatEur(amount) {
     return `€ ${amount.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -18,14 +18,41 @@ export default function DashboardPanel({ onNewTransfer, isJunior }) {
     useEffect(() => {
         async function loadData() {
             try {
-                const accs = await getMyAccounts()
+                const [accs, allTransfers] = await Promise.all([
+                    getMyAccounts(),
+                    getTransfers().catch(() => []) // Fallback if transfers endpoint fails
+                ])
                 setAccounts(accs)
 
                 if (accs.length > 0) {
                     const mainAccountId = accs[0].id
                     setMainAccountId(mainAccountId)
                     const trans = await getAccountTransactions(mainAccountId)
-                    setTransactions(trans)
+                    
+                    // Filter transfers that are pending parent approval or rejected
+                    const pendingOrRejectedTransfers = allTransfers.filter(
+                        t => t.fromAccountId === mainAccountId && (t.status === 'PENDING_APPROVAL' || t.status === 'REJECTED')
+                    )
+
+                    // Map transfers to match transaction properties
+                    const mappedTransfers = pendingOrRejectedTransfers.map(t => ({
+                        id: t.id,
+                        accountId: t.fromAccountId,
+                        amount: t.amount,
+                        currency: t.currency,
+                        type: 'DEBIT',
+                        status: t.status,
+                        description: t.description,
+                        createdAt: t.createdAt,
+                        isPendingTransfer: true
+                    }))
+
+                    // Merge and sort chronologically
+                    const mergedTransactions = [...mappedTransfers, ...trans].sort(
+                        (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+                    )
+
+                    setTransactions(mergedTransactions)
                 }
             } catch (error) {
                 console.error("Failed to fetch dashboard data:", error)
@@ -104,11 +131,20 @@ export default function DashboardPanel({ onNewTransfer, isJunior }) {
                     <BalanceCard accounts={accounts} loading={loading} />
                 </div>
 
-                {/* Ostatnie transakcje */}
                 <TransactionList
                     transactions={transactions}
                     loading={loading}
-                    onSelect={(txId) => setSelectedTxId(txId)}
+                    onSelect={(txId) => {
+                        const tx = transactions.find(t => t.id === txId)
+                        if (tx?.isPendingTransfer) {
+                            alert(tx.status === 'PENDING_APPROVAL'
+                                ? 'Ten przelew czeka na akceptację przez rodzica w jego Strefie Rodzica. 🧸📱'
+                                : 'Ten przelew został odrzucony przez rodzica. ❌'
+                            )
+                            return
+                        }
+                        setSelectedTxId(txId)
+                    }}
                 />
             </div>
 

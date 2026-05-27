@@ -132,6 +132,16 @@ export async function rejectTransfer(transferId) {
     return response.json()
 }
 
+export async function getTransfers() {
+    const response = await fetch("/api/transfers", {
+        headers: getHeaders(),
+    })
+    if (!response.ok) {
+        throw new Error(await readError(response))
+    }
+    return response.json()
+}
+
 export async function getCards() {
     const response = await fetch("/api/cards", {
         headers: getHeaders(),
