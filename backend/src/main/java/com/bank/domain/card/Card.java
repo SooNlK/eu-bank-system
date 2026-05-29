@@ -34,6 +34,9 @@ public class Card extends AbstractAggregateRoot<Card> {
     @Column(nullable = false, length = 4)
     private String last4;
 
+    @Column(name = "masked_pan", length = 32)
+    private String maskedPan;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 10)
     private CardType type;
@@ -65,4 +68,7 @@ public class Card extends AbstractAggregateRoot<Card> {
             @AttributeOverride(name = "currency", column = @Column(name = "currency", insertable = false, updatable = false))
     })
     private Money monthlyLimit;
+
+    @Transient
+    private BigDecimal networkBalance;
 }

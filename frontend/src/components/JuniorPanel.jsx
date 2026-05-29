@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getJuniorAccounts, createJuniorAccount, getPendingApprovals, approveTransfer, rejectTransfer, getMyAccounts } from '../services/account'
+import { getJuniorAccounts, createJuniorAccount, getPendingApprovals, approveTransfer, rejectTransfer, getMyAccounts, createInternalTransfer } from '../services/account'
 
 function formatEur(amount) {
     return `€ ${amount.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -18,6 +18,14 @@ export default function JuniorPanel() {
     const [loading, setLoading] = useState(true)
     const [modalOpen, setModalOpen] = useState(false)
     const [actionLoading, setActionLoading] = useState(null) // store transfer ID being approved/rejected
+    
+    // Quick funding states
+    const [activeFundingAccountId, setActiveFundingAccountId] = useState(null)
+    const [fundFromAccountId, setFundFromAccountId] = useState('')
+    const [fundAmount, setFundAmount] = useState('')
+    const [fundDescription, setFundDescription] = useState('Kieszonkowe 🧸')
+    const [fundSubmitting, setFundSubmitting] = useState(false)
+    const [fundError, setFundError] = useState('')
 
     // Form State
     const [firstName, setFirstName] = useState('')
@@ -76,6 +84,36 @@ export default function JuniorPanel() {
             alert(err.message || 'Nie udało się odrzucić przelewu')
         } finally {
             setActionLoading(null)
+        }
+    }
+
+    const handleFundSubmit = async (toIban) => {
+        if (!fundFromAccountId || !fundAmount || Number(fundAmount) <= 0) {
+            setFundError('Podaj prawidłową kwotę przelewu.')
+            return
+        }
+
+        setFundSubmitting(true)
+        setFundError('')
+
+        try {
+            await createInternalTransfer({
+                fromAccountId: fundFromAccountId,
+                toIban: toIban,
+                amount: Number(fundAmount),
+                currency: 'EUR',
+                valueDate: new Date().toISOString().split('T')[0],
+                description: fundDescription || 'Kieszonkowe 🧸'
+            })
+            // Reset state and refresh parent & junior accounts
+            setActiveFundingAccountId(null)
+            setFundAmount('')
+            setFundDescription('Kieszonkowe 🧸')
+            await loadData()
+        } catch (err) {
+            setFundError(err.message || 'Nie udało się wykonać przelewu kieszonkowego.')
+        } finally {
+            setFundSubmitting(false)
         }
     }
 
@@ -217,28 +255,116 @@ export default function JuniorPanel() {
                             {juniorAccounts.map((acc) => (
                                 <div
                                     key={acc.id}
-                                    className="border border-slate-100 hover:border-slate-200 rounded-xl p-4 bg-gradient-to-br from-white to-slate-50/20 flex flex-col sm:flex-row justify-between sm:items-center gap-3 transition-all"
+                                    className="border border-slate-100 hover:border-slate-200 rounded-xl p-4 bg-gradient-to-br from-white to-slate-50/20 flex flex-col gap-3 transition-all"
                                 >
-                                    <div className="min-w-0">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <span className="text-[13px] font-bold text-slate-800">{acc.ownerName || 'Konto Dziecka'}</span>
-                                            <span className="bg-purple-100 text-purple-700 text-[9px] font-semibold px-2 py-0.5 rounded-full uppercase">
-                                                Junior 🧸
-                                            </span>
-                                        </div>
-                                        <p className="text-[10px] text-slate-400 font-mono tracking-wider mb-0.5 truncate">
-                                            {formatIBAN(acc.accountNumber)}
-                                        </p>
-                                        {acc.parentAccountId && (
-                                            <p className="text-[9px] text-slate-400">
-                                                Powiązane z Twoim kontem: <span className="font-mono">{formatIBAN(parentAccounts.find(p => p.id === acc.parentAccountId)?.accountNumber ?? '')}</span>
+                                    <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+                                        <div className="min-w-0">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className="text-[13px] font-bold text-slate-800">{acc.ownerName || 'Konto Dziecka'}</span>
+                                                <span className="bg-purple-100 text-purple-700 text-[9px] font-semibold px-2 py-0.5 rounded-full uppercase">
+                                                    Junior 🧸
+                                                </span>
+                                            </div>
+                                            <p className="text-[10px] text-slate-400 font-mono tracking-wider mb-0.5 truncate">
+                                                {formatIBAN(acc.accountNumber)}
                                             </p>
-                                        )}
+                                            {acc.parentAccountId && (
+                                                <p className="text-[9px] text-slate-400">
+                                                    Powiązane z Twoim kontem: <span className="font-mono">{formatIBAN(parentAccounts.find(p => p.id === acc.parentAccountId)?.accountNumber ?? '')}</span>
+                                                </p>
+                                            )}
+                                        </div>
+                                        <div className="text-left sm:text-right shrink-0 flex sm:flex-col items-start sm:items-end justify-between sm:justify-center gap-2">
+                                            <div>
+                                                <p className="text-[16px] font-bold text-slate-900">{formatEur(acc.balance || 0)}</p>
+                                                <p className="text-[9px] text-green-500 font-medium sm:mb-1">Aktywne · Oszczędności</p>
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    setFundAmount('')
+                                                    setFundDescription('Kieszonkowe 🧸')
+                                                    setFundError('')
+                                                    setFundFromAccountId(parentAccounts[0]?.id || '')
+                                                    setActiveFundingAccountId(activeFundingAccountId === acc.id ? null : acc.id)
+                                                }}
+                                                className="h-7 px-3 rounded-lg border border-blue-200 bg-blue-50 text-[11px] font-semibold text-blue-700 hover:bg-blue-100 transition-colors cursor-pointer flex items-center gap-1 shrink-0 self-start sm:self-auto shadow-sm"
+                                            >
+                                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                                                </svg>
+                                                Zasil konto
+                                            </button>
+                                        </div>
                                     </div>
-                                    <div className="text-left sm:text-right shrink-0">
-                                        <p className="text-[16px] font-bold text-slate-900">{formatEur(acc.balance || 0)}</p>
-                                        <p className="text-[9px] text-green-500 font-medium">Aktywne · Oszczędności</p>
-                                    </div>
+
+                                    {activeFundingAccountId === acc.id && (
+                                        <div className="mt-3 pt-3 border-t border-slate-100 flex flex-col gap-3 animate-in slide-in-from-top-2 duration-200 text-left">
+                                            <p className="text-[11px] font-bold text-[#1a3c8f] uppercase tracking-wider">Szybki przelew kieszonkowego 🧸</p>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                <label className="flex flex-col gap-1 text-left">
+                                                    <span className="text-[10px] text-slate-400 font-medium">Z rachunku rodzica</span>
+                                                    <select
+                                                        value={fundFromAccountId}
+                                                        onChange={e => setFundFromAccountId(e.target.value)}
+                                                        className="h-8 rounded-lg border border-slate-200 px-2 text-[12px] bg-white outline-none focus:border-blue-400 cursor-pointer"
+                                                    >
+                                                        {parentAccounts.map(p => (
+                                                            <option key={p.id} value={p.id}>
+                                                                {p.type === 'STANDARD' ? 'Rachunek główny' : p.type} · {formatEur(p.balance)}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </label>
+                                                <label className="flex flex-col gap-1 text-left">
+                                                    <span className="text-[10px] text-slate-400 font-medium">Kwota (€)</span>
+                                                    <input
+                                                        type="number"
+                                                        min="0.01"
+                                                        step="0.01"
+                                                        required
+                                                        value={fundAmount}
+                                                        onChange={e => setFundAmount(e.target.value)}
+                                                        className="h-8 rounded-lg border border-slate-200 px-2 text-[12px] bg-white outline-none focus:border-blue-400 font-semibold"
+                                                        placeholder="np. 20.00"
+                                                    />
+                                                </label>
+                                            </div>
+                                            <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-end">
+                                                <label className="flex-1 flex flex-col gap-1 text-left">
+                                                    <span className="text-[10px] text-slate-400 font-medium">Tytuł przelewu</span>
+                                                    <input
+                                                        type="text"
+                                                        required
+                                                        value={fundDescription}
+                                                        onChange={e => setFundDescription(e.target.value)}
+                                                        className="h-8 rounded-lg border border-slate-200 px-2 text-[12px] bg-white outline-none focus:border-blue-400"
+                                                    />
+                                                </label>
+                                                <div className="flex gap-2 shrink-0 justify-end">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setActiveFundingAccountId(null)}
+                                                        className="h-8 px-3 rounded-lg border border-slate-200 bg-white text-[11px] font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                                                    >
+                                                        Anuluj
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        disabled={fundSubmitting}
+                                                        onClick={() => handleFundSubmit(acc.accountNumber)}
+                                                        className="h-8 px-4 rounded-lg border-none bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-semibold cursor-pointer shadow-sm disabled:opacity-50"
+                                                    >
+                                                        {fundSubmitting ? 'Wysyłanie...' : 'Przelej'}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            {fundError && (
+                                                <p className="text-[10px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-2 py-1 mt-1">
+                                                    ⚠️ {fundError}
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                         </div>

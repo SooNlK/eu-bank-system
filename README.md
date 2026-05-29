@@ -13,6 +13,59 @@ Celem projektu jest implementacja procesu biznesowego: systemu rozliczania przel
 
 ## Zakres Funkcjonalności
 
+### Integracja z modułem kart płatniczych
+
+Backend banku integruje się z zewnętrznym modułem `FilipSl3/Karty-Platnicze-Aplikacje-Biznesowe` jako bank-wydawca kart. Moduł kart powinien działać z gatewayem REST pod adresem `http://localhost:8072`.
+
+Konfiguracja po stronie banku:
+
+```env
+CARD_NETWORK_BASE_URL=http://host.docker.internal:8072
+CARD_NETWORK_API_KEY=bank-key-eu-a
+CARD_NETWORK_HMAC_SECRET=secret-eu-a-hmac
+```
+
+Endpointy banku:
+
+| Metoda | Endpoint | Opis |
+|---|---|---|
+| `POST` | `/api/cards` | Zamawia kartę w zewnętrznej sieci kartowej i zapisuje token lokalnie |
+| `GET` | `/api/cards` | Lista kart zalogowanego klienta |
+| `GET` | `/api/cards/{cardId}` | Szczegóły karty |
+| `POST` | `/api/cards/{cardId}/activate` | Aktywacja karty fizycznej/prepaid |
+| `POST` | `/api/cards/{cardId}/block` | Blokada karty |
+| `POST` | `/api/cards/{cardId}/unblock` | Odblokowanie karty |
+| `PATCH` | `/api/cards/{cardId}/limits` | Lokalna aktualizacja limitów |
+| `POST` | `/api/v1/authorize` | Callback dla sieci kartowej: rezerwacja środków |
+| `POST` | `/api/v1/capture` | Callback dla sieci kartowej: finalne księgowanie płatności |
+| `POST` | `/api/v1/refund` | Callback dla sieci kartowej: zwrot płatności |
+
+Przykład wydania karty:
+
+```json
+{
+  "accountId": "uuid-rachunku",
+  "cardType": "VIRTUAL",
+  "initialBalance": 0,
+  "dailyLimit": 1000,
+  "monthlyLimit": 5000
+}
+```
+
+Pełny PAN i CVV są zwracane przez endpoint wydania karty tylko raz. Bank zapisuje lokalnie wyłącznie token, zamaskowany PAN, ostatnie 4 cyfry i status.
+
+Przykład autoryzacji wywoływanej przez moduł kart:
+
+```json
+{
+  "account_id": "uuid-rachunku",
+  "amount": 150.00,
+  "currency": "EUR",
+  "transaction_id": "uuid-transakcji-z-sieci-kartowej",
+  "merchant_name": "Sklep testowy"
+}
+```
+
 
 ## Struktura Bazy Danych 
 

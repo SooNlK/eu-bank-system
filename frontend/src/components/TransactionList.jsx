@@ -20,6 +20,9 @@ export default function TransactionList({ transactions = [], loading, onSelect }
 
     const mappedTransactions = transactions.map(tx => {
         const isExpense = tx.type === 'DEBIT';
+        const isPending = tx.status === 'PENDING_APPROVAL';
+        const isRejected = tx.status === 'REJECTED';
+        
         const rawAmount = tx.amount?.amount ?? tx.amount ?? 0;
         const currency = tx.amount?.currency ?? tx.currency ?? 'EUR';
         const amountStr = new Intl.NumberFormat('pl-PL', { style: 'currency', currency }).format(rawAmount);
@@ -27,8 +30,18 @@ export default function TransactionList({ transactions = [], loading, onSelect }
         const dateObj = new Date(tx.createdAt);
         const dateStr = dateObj.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short', year: 'numeric' });
 
-        const iconBg = isExpense ? 'bg-red-50' : 'bg-green-50';
-        const icon = isExpense ? (
+        const iconBg = isPending ? 'bg-amber-50' : isRejected ? 'bg-rose-50' : isExpense ? 'bg-red-50' : 'bg-green-50';
+        const icon = isPending ? (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+            </svg>
+        ) : isRejected ? (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#e11d48" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+        ) : isExpense ? (
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                 <path d="M5 12h14M12 5l7 7-7 7" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
@@ -44,12 +57,18 @@ export default function TransactionList({ transactions = [], loading, onSelect }
             icon,
             name: tx.description || tx.type,
             badge: {
-                label: tx.type,
-                className: isExpense ? 'bg-red-50 text-red-500' : 'bg-green-50 text-green-600'
+                label: isPending ? 'Czeka na zgodę 🧸' : isRejected ? 'Odrzucony ❌' : tx.type,
+                className: isPending 
+                    ? 'bg-amber-50 text-amber-700 border border-amber-200/50' 
+                    : isRejected
+                    ? 'bg-rose-50 text-rose-700 border border-rose-200/50'
+                    : isExpense 
+                    ? 'bg-red-50 text-red-500' 
+                    : 'bg-green-50 text-green-600'
             },
             date: dateStr,
             amount: (isExpense ? '- ' : '+ ') + amountStr,
-            amountColor: isExpense ? 'text-red-500' : 'text-green-600'
+            amountColor: isPending ? 'text-amber-600 font-semibold' : isRejected ? 'text-rose-400 line-through' : isExpense ? 'text-red-500' : 'text-green-600'
         };
     });
 

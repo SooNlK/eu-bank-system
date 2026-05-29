@@ -8,9 +8,11 @@ export default function Sidebar({ activeNav, onNavChange, userEmail, isJunior, p
 
     const items = isJunior ? [
         { id: 'dashboard', label: 'Pulpit 🧸', icon: HomeIcon },
+        { id: 'cards', label: 'Karta 💳', icon: CardIcon },
         { id: 'internal', label: 'Przelew 🚀', icon: RocketIcon }
     ] : [
         { id: 'dashboard', label: 'Pulpit', icon: HomeIcon },
+        { id: 'cards', label: 'Karty', icon: CardIcon },
         { id: 'transfers', label: 'Przelewy', icon: ActivityIcon },
         { id: 'junior', label: 'Strefa Rodzica', icon: ChildIcon }
     ]
@@ -110,6 +112,15 @@ function ActivityIcon({ size = 16, color = 'currentColor' }) {
     return (
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
             <path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+    )
+}
+
+function CardIcon({ size = 16, color = 'currentColor' }) {
+    return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+            <rect x="3" y="5" width="18" height="14" rx="2.5" stroke={color} strokeWidth="1.8" />
+            <path d="M3 10h18M7 15h4" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
         </svg>
     )
 }
