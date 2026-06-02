@@ -30,9 +30,18 @@ services:
       CARD_NETWORK_BASE_URL: ${CARD_NETWORK_BASE_URL:-http://host.docker.internal:8072}
       CARD_NETWORK_API_KEY: ${CARD_NETWORK_API_KEY:-bank-key-eu-a}
       CARD_NETWORK_HMAC_SECRET: ${CARD_NETWORK_HMAC_SECRET:-secret-eu-a-hmac}
+      TARGET_URL: http://target_service:8001
+      SEPA_BATCH_URL: http://sepa_batch_service:8002
+      SEPA_INSTANT_URL: http://sepa_instant_service:8003
+      BANK_BIC: ${BANK_BIC:-BANKDEXX}
+      BANK_NAME: ${BANK_NAME:-Deutsche Bank}
+      INITIAL_LIQUIDITY: ${INITIAL_LIQUIDITY:-1000000.00}
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      - default
+      - eu-payments-units_payment_network
 
   frontend:
     build:
@@ -43,6 +52,13 @@ services:
       - "${FRONTEND_PORT}:80"
     depends_on:
       - backend
+
+networks:
+  # NIE redefiniujemy "default" - Docker Compose automatycznie tworzy sieć
+  # eu-bank-system_default, na której są db, backend i frontend.
+  # Backend dodatkowo dołącza do sieci symulatora by komunikować się z target_service itp.
+  eu-payments-units_payment_network:
+    external: true
 
 volumes:
   postgres_data:

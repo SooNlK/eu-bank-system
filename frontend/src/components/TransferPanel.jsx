@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getMyAccounts } from '../services/account'
+import { getMyAccounts, createExternalTransfer } from '../services/account'
 
 const inputClass =
     'w-full text-[12px] border border-slate-200 rounded-[9px] px-3 py-2 text-slate-800 bg-slate-50 outline-none focus:border-blue-400'
@@ -151,24 +151,35 @@ export default function TransferPanel({ onClose, initialType = 'sepa', onDashboa
         setLoading(true)
         setError('')
 
+        // Ustal kanał płatności
+        const channelMap = { sepa: 'SEPA', instant: 'SEPA_INSTANT', target: 'TARGET' }
+        const channel = channelMap[selected] || 'SEPA'
+
         try {
-            // Simulate network latency for external transfer execution
-            await new Promise((resolve) => setTimeout(resolve, 800))
-
-            const isJuniorUser = fromAccount.type === 'JUNIOR'
-            const requiresApproval = isJuniorUser || amountNum > 15000
-
-            setTransfer({
-                id: 'mock-external-transfer-id',
+            const result = await createExternalTransfer({
+                fromAccountId: fromId,
+                toIban: form.iban,
+                toBic: form.bic || null,
+                beneficiaryName: form.beneficiaryName || null,
                 amount: amountNum,
-                currency: fromAccount.currency,
-                status: requiresApproval ? 'PENDING_APPROVAL' : 'COMPLETED',
-                fromAccountOwner: 'Junior'
+                currency: fromAccount.currency || 'EUR',
+                channel,
+                valueDate: form.executionDate || form.valueDate || null,
+                description: form.remittance || null,
             })
 
-            // Deduct balance locally if transaction completes immediately
-            if (!requiresApproval) {
-                fromAccount.balance -= amountNum
+            setTransfer({
+                id: result.id,
+                amount: result.amount ?? amountNum,
+                currency: result.currency ?? (fromAccount.currency || 'EUR'),
+                status: result.status,
+                channel: result.channel,
+                externalRef: result.id,
+            })
+
+            // Odśwież saldo lokalnie (backend już je zaktualizował)
+            if (result.status !== 'PENDING_APPROVAL') {
+                fromAccount.balance = Math.max(0, (fromAccount.balance || 0) - amountNum)
             }
         } catch (err) {
             setError(err.message || 'Nie udało się zlecić przelewu')
@@ -177,22 +188,28 @@ export default function TransferPanel({ onClose, initialType = 'sepa', onDashboa
         }
     }
 
+
     if (transfer) {
         const completed = transfer.status === 'COMPLETED'
         const pendingApproval = transfer.status === 'PENDING_APPROVAL'
+        const processing = transfer.status === 'PROCESSING' // SEPA Batch – w kolejce
 
         let statusBg = 'bg-red-50'
         let statusStroke = '#dc2626'
         let statusTitle = 'Przelew nie został wykonany'
-        
+
         if (completed) {
             statusBg = 'bg-green-50'
             statusStroke = '#16a34a'
-            statusTitle = 'Przelew wykonany'
+            statusTitle = 'Przelew wykonany ✓'
         } else if (pendingApproval) {
             statusBg = 'bg-amber-50'
             statusStroke = '#d97706'
             statusTitle = 'Oczekiwanie na zatwierdzenie 🧸'
+        } else if (processing) {
+            statusBg = 'bg-blue-50'
+            statusStroke = '#2563eb'
+            statusTitle = 'Przelew w kolejce SEPA ⏳'
         }
 
         return (
@@ -206,7 +223,10 @@ export default function TransferPanel({ onClose, initialType = 'sepa', onDashboa
                         {pendingApproval && (
                             <path d="M12 8v4m0 4h.01" stroke="#d97706" strokeWidth="2" strokeLinecap="round" />
                         )}
-                        {!completed && !pendingApproval && (
+                        {processing && (
+                            <path d="M12 6v6l4 2" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" />
+                        )}
+                        {!completed && !pendingApproval && !processing && (
                             <path d="M8 8l8 8M16 8l-8 8" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" />
                         )}
                     </svg>
@@ -220,6 +240,12 @@ export default function TransferPanel({ onClose, initialType = 'sepa', onDashboa
                             Przelew oczekuje na zatwierdzenie przez rodzica! 🧸📱<br />
                             Kwota: <strong className="text-slate-800">{formatCurrency(transfer.amount, transfer.currency)}</strong>.
                         </p>
+                    ) : processing ? (
+                        <p className="leading-relaxed">
+                            Przelew SEPA przyjęty do rozliczenia.<br />
+                            Kwota: <strong className="text-slate-800">{formatCurrency(transfer.amount, transfer.currency)}</strong>.<br />
+                            <span className="text-blue-500 font-medium">Rozliczenie nastąpi w ciągu ~5 minut (sesja SEPA Batch).</span>
+                        </p>
                     ) : (
                         <p className="leading-relaxed">
                             Przelew został wysłany pomyślnie!<br />
@@ -227,6 +253,7 @@ export default function TransferPanel({ onClose, initialType = 'sepa', onDashboa
                         </p>
                     )}
                 </div>
+
                 <div className="flex gap-3 mt-4 w-full px-4 sm:px-0 sm:w-auto">
                     <button
                         onClick={() => {

@@ -66,7 +66,9 @@ class TransferServiceTest {
                 "eur",
                 LocalDate.now(),
                 TransferChannel.INTERNAL,
-                "Internal top-up"
+                "Internal top-up",
+                null,
+                null
         ), owner.getEmail());
 
         assertThat(response.status()).isEqualTo(TransferStatus.COMPLETED);
@@ -94,7 +96,9 @@ class TransferServiceTest {
                 "EUR",
                 LocalDate.now(),
                 TransferChannel.INTERNAL,
-                "Too large"
+                "Too large",
+                null,
+                null
         ), owner.getEmail());
 
         assertThat(response.status()).isEqualTo(TransferStatus.FAILED);
@@ -117,7 +121,9 @@ class TransferServiceTest {
                 "EUR",
                 LocalDate.now(),
                 TransferChannel.INTERNAL,
-                "Bad IBAN"
+                "Bad IBAN",
+                null,
+                null
         ), owner.getEmail()))
                 .isInstanceOf(ResponseStatusException.class)
                 .satisfies(ex -> assertThat(((ResponseStatusException) ex).getStatusCode())
@@ -140,7 +146,9 @@ class TransferServiceTest {
                 "EUR",
                 LocalDate.now().plusDays(1),
                 TransferChannel.INTERNAL,
-                "Future value date"
+                "Future value date",
+                null,
+                null
         ), owner.getEmail()))
                 .isInstanceOf(ResponseStatusException.class)
                 .satisfies(ex -> assertThat(((ResponseStatusException) ex).getStatusCode())

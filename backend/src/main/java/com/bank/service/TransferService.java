@@ -1,5 +1,9 @@
 package com.bank.service;
 
+import com.bank.client.eupayments.IsoXmlBuilder;
+import com.bank.client.eupayments.SepaBatchClient;
+import com.bank.client.eupayments.SepaInstantClient;
+import com.bank.config.EuPaymentsProperties;
 import com.bank.domain.account.Account;
 import com.bank.domain.account.AccountStatus;
 import com.bank.domain.customer.Customer;
@@ -16,6 +20,8 @@ import com.bank.dto.transfer.TransferResponse;
 import com.bank.repository.AccountRepository;
 import com.bank.repository.TransactionRepository;
 import com.bank.repository.TransferRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,26 +36,38 @@ import java.util.UUID;
 @Service
 public class TransferService {
 
+    private static final Logger log = LoggerFactory.getLogger(TransferService.class);
+
     private static final BigDecimal APPROVAL_LIMIT = new BigDecimal("15000.00");
+    private static final BigDecimal SEPA_INSTANT_LIMIT = new BigDecimal("100000.00");
 
     private final TransferRepository transferRepository;
     private final AccountRepository accountRepository;
     private final TransactionRepository transactionRepository;
     private final AccountService accountService;
     private final com.bank.repository.CustomerRepository customerRepository;
+    private final SepaInstantClient sepaInstantClient;
+    private final SepaBatchClient sepaBatchClient;
+    private final EuPaymentsProperties euPaymentsProps;
 
     public TransferService(
             TransferRepository transferRepository,
             AccountRepository accountRepository,
             TransactionRepository transactionRepository,
             AccountService accountService,
-            com.bank.repository.CustomerRepository customerRepository
+            com.bank.repository.CustomerRepository customerRepository,
+            SepaInstantClient sepaInstantClient,
+            SepaBatchClient sepaBatchClient,
+            EuPaymentsProperties euPaymentsProps
     ) {
         this.transferRepository = transferRepository;
         this.accountRepository = accountRepository;
         this.transactionRepository = transactionRepository;
         this.accountService = accountService;
         this.customerRepository = customerRepository;
+        this.sepaInstantClient = sepaInstantClient;
+        this.sepaBatchClient = sepaBatchClient;
+        this.euPaymentsProps = euPaymentsProps;
     }
 
     @Transactional
@@ -58,9 +76,34 @@ public class TransferService {
         String targetIban = normalizeIban(request.toIban());
         LocalDate valueDate = validateValueDate(request.valueDate(), request.channel());
         String currency = validateCurrency(request.currency());
+        TransferChannel channel = request.channel();
 
+        boolean isExternal = channel == TransferChannel.SEPA
+                || channel == TransferChannel.SEPA_INSTANT
+                || channel == TransferChannel.TARGET;
+
+        if (isExternal) {
+            return executeExternalTransfer(request, fromAccount, targetIban, currency, valueDate);
+        } else {
+            return executeInternalTransfer(request, fromAccount, targetIban, currency, valueDate, email);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Przelew wewnętrzny (pomiędzy kontami w naszym banku)
+    // -----------------------------------------------------------------------
+
+    private TransferResponse executeInternalTransfer(
+            TransferRequest request,
+            Account fromAccount,
+            String targetIban,
+            String currency,
+            LocalDate valueDate,
+            String email
+    ) {
         Account toAccount = accountRepository.findByAccountNumber_Value(targetIban)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Rachunek odbiorcy nie istnieje w tym banku"));
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST, "Rachunek odbiorcy nie istnieje w tym banku"));
 
         boolean requiresApproval = (request.amount().compareTo(APPROVAL_LIMIT) > 0) ||
                                    (fromAccount.getType() == com.bank.domain.account.AccountType.JUNIOR);
@@ -88,6 +131,155 @@ public class TransferService {
         processInternalTransfer(transfer);
         return mapToResponse(transfer);
     }
+
+    // -----------------------------------------------------------------------
+    // Przelew zewnętrzny (SEPA, SEPA Instant, TARGET)
+    // -----------------------------------------------------------------------
+
+    private TransferResponse executeExternalTransfer(
+            TransferRequest request,
+            Account fromAccount,
+            String targetIban,
+            String currency,
+            LocalDate valueDate
+    ) {
+        validateExternalTransfer(fromAccount, request);
+
+        boolean requiresApproval = (request.amount().compareTo(APPROVAL_LIMIT) > 0) ||
+                                   (fromAccount.getType() == com.bank.domain.account.AccountType.JUNIOR);
+
+        Transfer transfer = Transfer.builder()
+                .fromAccount(fromAccount)
+                .toAccount(null) // zewnętrzny – brak konta lokalnego
+                .toIban(targetIban)
+                .toBic(request.toBic())
+                .beneficiaryName(request.beneficiaryName())
+                .amount(Money.of(request.amount(), currency))
+                .channel(request.channel())
+                .status(TransferStatus.PENDING)
+                .description(request.description())
+                .valueDate(valueDate)
+                .requiresApproval(requiresApproval)
+                .build();
+
+        transfer = transferRepository.save(transfer);
+
+        if (transfer.isRequiresApproval()) {
+            transfer.setStatus(TransferStatus.PENDING_APPROVAL);
+            transfer = transferRepository.save(transfer);
+            return mapToResponse(transfer);
+        }
+
+        processExternalTransfer(transfer);
+        return mapToResponse(transfer);
+    }
+
+    private void processExternalTransfer(Transfer transfer) {
+        transfer.setStatus(TransferStatus.PROCESSING);
+        transferRepository.save(transfer);
+
+        try {
+            Account fromAccount = transfer.getFromAccount();
+            Money amount = transfer.getAmount();
+
+            // Sprawdzenie salda lokalnego konta
+            if (fromAccount.getBalance().getAmount().compareTo(amount.getAmount()) < 0) {
+                transfer.setStatus(TransferStatus.FAILED);
+                transferRepository.save(transfer);
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Niewystarczające środki na rachunku");
+            }
+
+            // Zbudowanie XML ISO 20022
+            String endToEndId = transfer.getId().toString();
+            String debtorIban = fromAccount.getAccountNumber().getValue();
+            String xml = IsoXmlBuilder.build(
+                    endToEndId,
+                    amount.getAmount(),
+                    amount.getCurrency(),
+                    debtorIban,
+                    transfer.getToIban(),
+                    euPaymentsProps.bankBic(),
+                    transfer.getToBic(),
+                    transfer.getDescription()
+            );
+
+            // Routing do odpowiedniego symulatora
+            String externalRef = null;
+            String externalStatus = null;
+            switch (transfer.getChannel()) {
+                case SEPA_INSTANT -> {
+                    SepaInstantClient.SepaPaymentResponse resp = sepaInstantClient.submitTransfer(xml);
+                    externalRef = resp != null ? resp.endToEndId() : null;
+                    externalStatus = resp != null ? resp.status() : null;
+                    log.info("SEPA Instant: transfer {} → status={}, TxSts={}",
+                            transfer.getId(), externalStatus, resp != null ? resp.rawTxSts() : null);
+                }
+                case SEPA -> {
+                    SepaBatchClient.SepaBatchResponse resp = sepaBatchClient.submitTransfer(xml);
+                    externalRef = resp != null ? resp.endToEndId() : null;
+                    externalStatus = resp != null ? resp.status() : null;
+                    log.info("SEPA Batch: transfer {} → status={}, sessionId={}",
+                            transfer.getId(), externalStatus, resp != null ? resp.sessionId() : null);
+                }
+                case TARGET -> {
+                    SepaInstantClient.SepaPaymentResponse resp = sepaInstantClient.submitTransfer(xml);
+                    externalRef = resp != null ? resp.endToEndId() : null;
+                    externalStatus = resp != null ? resp.status() : null;
+                    log.info("TARGET: transfer {} → status={}, TxSts={}",
+                            transfer.getId(), externalStatus, resp != null ? resp.rawTxSts() : null);
+                }
+                default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Nieobsługiwany kanał zewnętrzny: " + transfer.getChannel());
+            }
+
+            transfer.setExternalReferenceId(externalRef);
+
+            // Obciążamy lokalne konto nadawcy
+            fromAccount.setBalance(fromAccount.getBalance().subtract(amount));
+            accountRepository.save(fromAccount);
+
+            // Zapis transakcji DEBIT
+            transactionRepository.save(Transaction.builder()
+                    .account(fromAccount)
+                    .amount(amount)
+                    .type(TransactionType.DEBIT)
+                    .status(TransactionStatus.COMPLETED)
+                    .description(transfer.getDescription())
+                    .referenceId(transfer.getId().toString())
+                    .build());
+
+            // Status: dla SEPA Batch przelew jest w kolejce (PROCESSING), dla Instant/TARGET – COMPLETED
+            boolean isQueued = transfer.getChannel() == TransferChannel.SEPA
+                    && ("QUEUED".equalsIgnoreCase(externalStatus) || "PROCESSING".equalsIgnoreCase(externalStatus));
+            boolean isFailed = "FAILED".equalsIgnoreCase(externalStatus);
+
+            if (isFailed) {
+                transfer.setStatus(TransferStatus.FAILED);
+            } else {
+                transfer.setStatus(isQueued ? TransferStatus.PROCESSING : TransferStatus.COMPLETED);
+                if (!isQueued) {
+                    transfer.setCompletedAt(LocalDateTime.now());
+                }
+            }
+
+        } catch (ResponseStatusException ex) {
+            transfer.setStatus(TransferStatus.FAILED);
+            transferRepository.save(transfer);
+            throw ex;
+        } catch (Exception ex) {
+            log.error("Błąd podczas przetwarzania przelewu zewnętrznego {}: {}", transfer.getId(), ex.getMessage(), ex);
+            transfer.setStatus(TransferStatus.FAILED);
+            transferRepository.save(transfer);
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    "Błąd komunikacji z systemem płatniczym: " + ex.getMessage());
+        }
+
+        transferRepository.save(transfer);
+    }
+
+    // -----------------------------------------------------------------------
+    // Operacje zatwierdzania / odrzucania (wspólne dla internal i external)
+    // -----------------------------------------------------------------------
 
     @Transactional(readOnly = true)
     public List<TransferResponse> getHistory(String email) {
@@ -125,7 +317,17 @@ public class TransferService {
         }
 
         transfer.setApprovedAt(LocalDateTime.now());
-        processInternalTransfer(transfer);
+
+        boolean isExternal = transfer.getChannel() == TransferChannel.SEPA
+                || transfer.getChannel() == TransferChannel.SEPA_INSTANT
+                || transfer.getChannel() == TransferChannel.TARGET;
+
+        if (isExternal) {
+            processExternalTransfer(transfer);
+        } else {
+            processInternalTransfer(transfer);
+        }
+
         return mapToResponse(transfer);
     }
 
@@ -167,6 +369,10 @@ public class TransferService {
                 .map(this::mapToResponse)
                 .toList();
     }
+
+    // -----------------------------------------------------------------------
+    // Pomocnicze
+    // -----------------------------------------------------------------------
 
     private void processInternalTransfer(Transfer transfer) {
         transfer.setStatus(TransferStatus.PROCESSING);
@@ -231,6 +437,28 @@ public class TransferService {
         }
     }
 
+    private void validateExternalTransfer(Account fromAccount, TransferRequest request) {
+        if (fromAccount.getStatus() != AccountStatus.ACTIVE) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Rachunek źródłowy musi być aktywny");
+        }
+
+        String currency = request.currency() == null ? "" : request.currency().trim().toUpperCase();
+        if (!fromAccount.getBalance().getCurrency().equals(currency)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Waluta przelewu musi być zgodna z walutą rachunku źródłowego");
+        }
+
+        if (request.channel() == TransferChannel.TARGET && (request.toBic() == null || request.toBic().isBlank())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Przelew TARGET wymaga podania BIC banku odbiorcy");
+        }
+
+        if (request.channel() == TransferChannel.SEPA_INSTANT
+                && request.amount().compareTo(SEPA_INSTANT_LIMIT) > 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Limit pojedynczej transakcji SCT Inst wynosi 100 000 EUR");
+        }
+    }
+
     private String normalizeIban(String value) {
         try {
             return IBAN.of(value).getValue();
@@ -246,8 +474,10 @@ public class TransferService {
         if (valueDate.isBefore(today)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Data waluty nie może być z przeszłości");
         }
+        // Dla kanałów zewnętrznych SEPA pozwala na datę przyszłą (D+1)
         if (channel == TransferChannel.INTERNAL && !valueDate.equals(today)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Data waluty dla przelewu wewnętrznego musi być dzisiejsza");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Data waluty dla przelewu wewnętrznego musi być dzisiejsza");
         }
         return valueDate;
     }
@@ -265,6 +495,9 @@ public class TransferService {
                 transfer.getId(),
                 transfer.getFromAccount().getId(),
                 transfer.getToAccount() == null ? null : transfer.getToAccount().getId(),
+                transfer.getToIban(),
+                transfer.getToBic(),
+                transfer.getBeneficiaryName(),
                 transfer.getAmount().getAmount(),
                 transfer.getAmount().getCurrency(),
                 transfer.getChannel(),
