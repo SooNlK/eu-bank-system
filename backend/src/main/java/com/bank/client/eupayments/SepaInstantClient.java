@@ -1,6 +1,9 @@
 package com.bank.client.eupayments;
 
 import com.bank.config.EuPaymentsProperties;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpEntity;
@@ -9,6 +12,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.http.converter.StringHttpMessageConverter;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 import org.w3c.dom.Document;
@@ -38,9 +42,11 @@ public class SepaInstantClient {
         factory.setConnectTimeout(5000);
         factory.setReadTimeout(15000);
         this.restTemplate = new RestTemplate(factory);
-        // Tylko StringHttpMessageConverter – wysyłamy i odbieramy raw XML/tekst
+        MappingJackson2HttpMessageConverter jacksonConverter = new MappingJackson2HttpMessageConverter(new ObjectMapper());
+        jacksonConverter.setSupportedMediaTypes(List.of(MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, MediaType.TEXT_PLAIN, MediaType.ALL));
         this.restTemplate.setMessageConverters(List.of(
-                new StringHttpMessageConverter(StandardCharsets.UTF_8)
+                new StringHttpMessageConverter(StandardCharsets.UTF_8),
+                jacksonConverter
         ));
         this.baseUrl = props.sepaInstantUrl();
     }
@@ -121,4 +127,28 @@ public class SepaInstantClient {
             String sessionId,
             String rawTxSts
     ) {}
+
+    public record InstantTransferItem(
+            @JsonProperty("transfer_id") String transferId,
+            @JsonProperty("sender_iban") String senderIban,
+            @JsonProperty("receiver_iban") String receiverIban,
+            @JsonProperty("sender_bic") String senderBic,
+            @JsonProperty("receiver_bic") String receiverBic,
+            @JsonProperty("amount") double amount,
+            @JsonProperty("status") String status,
+            @JsonProperty("error_message") String errorMessage,
+            @JsonProperty("created_at") String createdAt
+    ) {}
+
+    public List<InstantTransferItem> getTransfers() {
+        try {
+            ResponseEntity<InstantTransferItem[]> response = restTemplate.getForEntity(
+                    baseUrl + "/transfers", InstantTransferItem[].class);
+            InstantTransferItem[] body = response.getBody();
+            return body != null ? List.of(body) : List.of();
+        } catch (Exception e) {
+            log.error("SEPA Instant: nie udało się pobrać listy transferów – {}", e.getMessage());
+            return List.of();
+        }
+    }
 }

@@ -11,7 +11,9 @@ public record EuPaymentsProperties(
         String sepaInstantUrl,
         String bankBic,
         String bankName,
-        BigDecimal initialLiquidity
+        BigDecimal initialLiquidity,
+        String webhookSecret,
+        String webhookUrl
 ) {
     public EuPaymentsProperties {
         if (targetUrl == null)     targetUrl = "http://localhost:8001";
@@ -20,5 +22,18 @@ public record EuPaymentsProperties(
         if (bankBic == null)       bankBic = "BANKDEXX";
         if (bankName == null)      bankName = "Deutsche Bank";
         if (initialLiquidity == null) initialLiquidity = new BigDecimal("1000000.00");
+        if (webhookSecret == null) webhookSecret = "my-secret-key";
+        if (webhookUrl == null || webhookUrl.isBlank()) {
+            String host = null;
+            try {
+                host = java.net.InetAddress.getLocalHost().getHostName();
+            } catch (Exception e) {
+                // Ignore
+            }
+            if (host == null || host.isBlank()) {
+                host = "eu-bank-backend";
+            }
+            webhookUrl = "http://" + host + ":8080/api/v1/target-settlement";
+        }
     }
 }

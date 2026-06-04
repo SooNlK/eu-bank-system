@@ -36,6 +36,7 @@ services:
       BANK_BIC: ${BANK_BIC:-BANKDEXX}
       BANK_NAME: ${BANK_NAME:-Deutsche Bank}
       INITIAL_LIQUIDITY: ${INITIAL_LIQUIDITY:-1000000.00}
+      WEBHOOK_URL: http://eu-bank-backend:8080/api/v1/target-settlement
     depends_on:
       db:
         condition: service_healthy
@@ -54,9 +55,6 @@ services:
       - backend
 
 networks:
-  # NIE redefiniujemy "default" - Docker Compose automatycznie tworzy sieć
-  # eu-bank-system_default, na której są db, backend i frontend.
-  # Backend dodatkowo dołącza do sieci symulatora by komunikować się z target_service itp.
   eu-payments-units_payment_network:
     external: true
 

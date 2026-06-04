@@ -509,4 +509,43 @@ public class TransferService {
                 transfer.getCompletedAt()
         );
     }
+
+    @Transactional
+    public void processIncomingTransfer(
+            String transferId,
+            String senderBic,
+            String senderIban,
+            String receiverIban,
+            BigDecimal amount,
+            String currency,
+            String description
+    ) {
+        log.info("Przetwarzanie przelewu przychodzącego: id={}, receiverIban={}, amount={} {}", 
+                transferId, receiverIban, amount, currency);
+
+        Account account = accountRepository.findByAccountNumber_Value(receiverIban)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, 
+                        "Rachunek odbiorcy " + receiverIban + " nie istnieje w tym banku"));
+
+        if (account.getStatus() != AccountStatus.ACTIVE) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Rachunek odbiorcy jest nieaktywny");
+        }
+
+        // Zwiększamy saldo konta odbiorcy
+        Money moneyAmount = Money.of(amount, currency);
+        account.setBalance(account.getBalance().add(moneyAmount));
+        accountRepository.save(account);
+
+        // Zapisujemy transakcję CREDIT
+        transactionRepository.save(Transaction.builder()
+                .account(account)
+                .amount(moneyAmount)
+                .type(TransactionType.CREDIT)
+                .status(TransactionStatus.COMPLETED)
+                .description(description)
+                .referenceId(transferId)
+                .build());
+
+        log.info("Zaksięgowano przelew przychodzący: {} dla konta {}", moneyAmount, receiverIban);
+    }
 }

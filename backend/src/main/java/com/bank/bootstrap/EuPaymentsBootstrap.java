@@ -34,6 +34,10 @@ public class EuPaymentsBootstrap implements ApplicationRunner {
 
         targetClient.registerBank(props.bankBic(), props.bankName());
 
+        // Rejestracja webhooka dla banku
+        log.info("Bootstrap: rejestruję webhook {} dla banku {}...", props.webhookUrl(), props.bankBic());
+        targetClient.registerWebhook(props.bankBic(), props.webhookUrl(), props.webhookSecret());
+
         BigDecimal balance = targetClient.getBankBalance(props.bankBic());
         if (balance == null) {
             log.warn("Bootstrap: nie udało się pobrać salda banku – pomijam zasilenie płynności");

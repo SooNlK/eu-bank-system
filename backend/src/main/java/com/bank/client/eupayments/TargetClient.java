@@ -99,9 +99,38 @@ public class TargetClient {
         }
     }
 
+    /**
+     * Rejestruje webhook w TARGET dla banku.
+     */
+    public void registerWebhook(String bic, String url, String secret) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, String>> request = new HttpEntity<>(
+                    Map.of("url", url, "secret", secret), headers);
+
+            restTemplate.postForEntity(baseUrl + "/banks/" + bic + "/webhook", request, String.class);
+            log.info("TARGET: zarejestrowano webhook w TARGET: url={}, bic={}", url, bic);
+        } catch (Exception e) {
+            log.warn("TARGET: nie udało się zarejestrować webhooka dla banku {} – {}", bic, e.getMessage());
+        }
+    }
+
     @JsonIgnoreProperties(ignoreUnknown = true)
     private record BankInfo(
             @JsonProperty("bic") String bic,
+            @JsonProperty("settlement_accounts") List<SettlementAccountInfo> settlementAccounts
+    ) {
+        public BigDecimal balance() {
+            if (settlementAccounts == null || settlementAccounts.isEmpty()) {
+                return BigDecimal.ZERO;
+            }
+            return settlementAccounts.get(0).balance();
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private record SettlementAccountInfo(
             @JsonProperty("balance") BigDecimal balance
     ) {}
 }

@@ -72,6 +72,9 @@ public class TransactionService {
                             if (transfer.getToAccount().getAccountNumber() != null) {
                                 counterpartyIban = transfer.getToAccount().getAccountNumber().getValue();
                             }
+                        } else {
+                            counterpartyName = transfer.getBeneficiaryName();
+                            counterpartyIban = transfer.getToIban();
                         }
                     } else if (transaction.getType() == TransactionType.CREDIT) {
                         if (transfer.getFromAccount() != null) {

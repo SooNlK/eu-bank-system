@@ -44,6 +44,8 @@ app:
     bank-bic: ${BANK_BIC:BANKDEXX}
     bank-name: ${BANK_NAME:Deutsche Bank}
     initial-liquidity: ${INITIAL_LIQUIDITY:1000000.00}
+    webhook-secret: ${WEBHOOK_SECRET:my-secret-key}
+    webhook-url: ${WEBHOOK_URL:}
 
 springdoc:
   api-docs:

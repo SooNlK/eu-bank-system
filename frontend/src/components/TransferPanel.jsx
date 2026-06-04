@@ -103,11 +103,9 @@ export default function TransferPanel({ onClose, initialType = 'sepa', onDashboa
         bic: '',
         amount: '',
         remittance: '',
-        creditorReference: '',
         executionDate: '',
         valueDate: '',
         uetr: '',
-        endToEndId: '',
     })
     const [accounts, setAccounts] = useState([])
     const [fromId, setFromId] = useState('')
@@ -263,11 +261,9 @@ export default function TransferPanel({ onClose, initialType = 'sepa', onDashboa
                                 bic: '',
                                 amount: '',
                                 remittance: '',
-                                creditorReference: '',
                                 executionDate: '',
                                 valueDate: '',
                                 uetr: '',
-                                endToEndId: '',
                             });
                             setTransfer(null);
                         }}
@@ -417,18 +413,7 @@ export default function TransferPanel({ onClose, initialType = 'sepa', onDashboa
                             </div>
                         )}
 
-                        {selected === 'instant' && (
-                            <div>
-                                <label className={labelClass}>Identyfikator końcowy (opcjonalnie)</label>
-                                <input
-                                    type="text"
-                                    value={form.endToEndId}
-                                    onChange={set('endToEndId')}
-                                    maxLength={140}
-                                    className={inputClass}
-                                />
-                            </div>
-                        )}
+
 
                         {selected === 'target' && (
                             <div>
@@ -461,17 +446,7 @@ export default function TransferPanel({ onClose, initialType = 'sepa', onDashboa
                         />
                     </div>
 
-                    <div>
-                        <label className={labelClass}>
-                            Referencja strukturalna dla odbiorcy <span className="text-slate-400 font-normal">(opcjonalnie)</span>
-                        </label>
-                        <input
-                            type="text"
-                            value={form.creditorReference}
-                            onChange={set('creditorReference')}
-                            className={inputClass}
-                        />
-                    </div>
+
 
                     {error && (
                         <p className="text-[12px] text-red-600 bg-red-50 border border-red-100 rounded-[9px] px-3 py-2 font-medium">
