@@ -62,7 +62,8 @@ public class TargetWebhookController {
                 if (payload.transferId() != null && payload.transferId().startsWith("NETT-")) {
                     log.info("SEPA Batch netting settlement received. No customer accounts to credit directly. Net amount: {} {}",
                             payload.amount(), payload.currency());
-                    return ResponseEntity.ok("Netting settlement logged");
+                    transferService.completePendingSepaBatchTransfers();
+                    return ResponseEntity.ok("Netting settlement logged and pending batch transfers completed");
                 }
 
                 log.info("SEPA Instant webhook received with null IBANs. Querying simulator transfers list...");
@@ -79,6 +80,43 @@ public class TargetWebhookController {
                     log.warn("SEPA Instant transfer {} details not found in simulator", payload.transferId());
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Transfer details not found in simulator");
                 }
+            }
+
+            // Zdarzenie RECALL (Wycofanie przelewu)
+            if ("transfer.recalled".equals(payload.event())) {
+                boolean isReceiverOurs = transferService.isAccountOurs(receiverIban);
+                boolean isSenderOurs = transferService.isAccountOurs(senderIban);
+
+                String desc = payload.description() != null && !payload.description().isBlank()
+                        ? payload.description()
+                        : "Zwrot przelewu (Recall)";
+
+                if (isReceiverOurs) {
+                    transferService.processIncomingRecallDebit(
+                            payload.transferId(),
+                            payload.senderBic(),
+                            senderIban,
+                            receiverIban,
+                            BigDecimal.valueOf(payload.amount()),
+                            payload.currency(),
+                            desc
+                    );
+                } else if (isSenderOurs) {
+                    transferService.processIncomingRecallCredit(
+                            payload.transferId(),
+                            payload.senderBic(),
+                            senderIban,
+                            receiverIban,
+                            BigDecimal.valueOf(payload.amount()),
+                            payload.currency(),
+                            desc
+                    );
+                } else {
+                    log.warn("Recall webhook received but neither sender nor receiver belongs to our bank: sender={}, receiver={}", senderIban, receiverIban);
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Account does not belong to this bank");
+                }
+
+                return ResponseEntity.ok("Recall processed successfully");
             }
 
             if (receiverIban == null || receiverIban.isBlank()) {

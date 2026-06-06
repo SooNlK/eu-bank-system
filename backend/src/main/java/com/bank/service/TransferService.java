@@ -556,4 +556,104 @@ public class TransferService {
 
         log.info("Zaksięgowano przelew przychodzący: {} dla konta {}", moneyAmount, receiverIban);
     }
+
+    @Transactional(readOnly = true)
+    public boolean isAccountOurs(String iban) {
+        if (iban == null || iban.isBlank()) {
+            return false;
+        }
+        return accountRepository.findByAccountNumber_Value(iban).isPresent();
+    }
+
+    @Transactional
+    public void completePendingSepaBatchTransfers() {
+        log.info("Marking all pending SEPA Batch transfers as COMPLETED");
+        List<Transfer> pending = transferRepository.findByChannelAndStatus(
+                TransferChannel.SEPA, TransferStatus.PROCESSING);
+        
+        for (Transfer t : pending) {
+            t.setStatus(TransferStatus.COMPLETED);
+            t.setCompletedAt(LocalDateTime.now());
+            transferRepository.save(t);
+            log.info("Completed SEPA Batch transfer: {}", t.getId());
+        }
+    }
+
+    @Transactional
+    public void processIncomingRecallDebit(
+            String transferId,
+            String senderBic,
+            String senderIban,
+            String receiverIban,
+            BigDecimal amount,
+            String currency,
+            String description
+    ) {
+        log.info("Przetwarzanie wycofania przelewu (Recall - obciążenie): id={}, receiverIban={}, amount={} {}", 
+                transferId, receiverIban, amount, currency);
+
+        Account account = accountRepository.findByAccountNumber_Value(receiverIban)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, 
+                        "Rachunek odbiorcy " + receiverIban + " nie istnieje w tym banku"));
+
+        if (account.getStatus() != AccountStatus.ACTIVE) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Rachunek odbiorcy jest nieaktywny");
+        }
+
+        Money moneyAmount = Money.of(amount, currency);
+        account.setBalance(account.getBalance().subtract(moneyAmount));
+        accountRepository.save(account);
+
+        transactionRepository.save(Transaction.builder()
+                .account(account)
+                .amount(moneyAmount)
+                .type(TransactionType.DEBIT)
+                .status(TransactionStatus.COMPLETED)
+                .description(description)
+                .referenceId("RECALL-" + transferId)
+                .counterpartyName("Zwrot przelewu (Recall)")
+                .counterpartyIban(senderIban)
+                .build());
+
+        log.info("Zaksięgowano wycofanie przelewu (obciążenie): {} z konta {}", moneyAmount, receiverIban);
+    }
+
+    @Transactional
+    public void processIncomingRecallCredit(
+            String transferId,
+            String senderBic,
+            String senderIban,
+            String receiverIban,
+            BigDecimal amount,
+            String currency,
+            String description
+    ) {
+        log.info("Przetwarzanie wycofania przelewu (Recall - uznanie): id={}, senderIban={}, amount={} {}", 
+                transferId, senderIban, amount, currency);
+
+        Account account = accountRepository.findByAccountNumber_Value(senderIban)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, 
+                        "Rachunek nadawcy " + senderIban + " nie istnieje w tym banku"));
+
+        if (account.getStatus() != AccountStatus.ACTIVE) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Rachunek nadawcy jest nieaktywny");
+        }
+
+        Money moneyAmount = Money.of(amount, currency);
+        account.setBalance(account.getBalance().add(moneyAmount));
+        accountRepository.save(account);
+
+        transactionRepository.save(Transaction.builder()
+                .account(account)
+                .amount(moneyAmount)
+                .type(TransactionType.CREDIT)
+                .status(TransactionStatus.COMPLETED)
+                .description(description)
+                .referenceId("RECALL-" + transferId)
+                .counterpartyName("Zwrot przelewu (Recall)")
+                .counterpartyIban(receiverIban)
+                .build());
+
+        log.info("Zaksięgowano wycofanie przelewu (uznanie): {} na konto {}", moneyAmount, senderIban);
+    }
 }
