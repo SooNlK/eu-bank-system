@@ -95,9 +95,7 @@ public class TargetWebhookController {
             String originalDescription = payload.description() != null && !payload.description().isBlank()
                     ? payload.description()
                     : "Przelew zewnętrzny przychodzący";
-            String displayDescription = senderIban != null && !senderIban.isBlank()
-                    ? originalDescription + " (Od: " + senderIban + ")"
-                    : originalDescription;
+            String displayDescription = originalDescription;
 
             transferService.processIncomingTransfer(
                     payload.transferId(),

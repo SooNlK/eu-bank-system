@@ -246,6 +246,8 @@ public class TransferService {
                     .status(TransactionStatus.COMPLETED)
                     .description(transfer.getDescription())
                     .referenceId(transfer.getId().toString())
+                    .counterpartyName(transfer.getBeneficiaryName())
+                    .counterpartyIban(transfer.getToIban())
                     .build());
 
             // Status: dla SEPA Batch przelew jest w kolejce (PROCESSING), dla Instant/TARGET – COMPLETED
@@ -399,6 +401,8 @@ public class TransferService {
                     .status(TransactionStatus.COMPLETED)
                     .description(transfer.getDescription())
                     .referenceId(transfer.getId().toString())
+                    .counterpartyName(toAccount.getCustomer().getFirstName() + " " + toAccount.getCustomer().getLastName())
+                    .counterpartyIban(toAccount.getAccountNumber().getValue())
                     .build());
 
             transactionRepository.save(Transaction.builder()
@@ -408,6 +412,8 @@ public class TransferService {
                     .status(TransactionStatus.COMPLETED)
                     .description(transfer.getDescription())
                     .referenceId(transfer.getId().toString())
+                    .counterpartyName(fromAccount.getCustomer().getFirstName() + " " + fromAccount.getCustomer().getLastName())
+                    .counterpartyIban(fromAccount.getAccountNumber().getValue())
                     .build());
 
             transfer.setStatus(TransferStatus.COMPLETED);
@@ -544,6 +550,8 @@ public class TransferService {
                 .status(TransactionStatus.COMPLETED)
                 .description(description)
                 .referenceId(transferId)
+                .counterpartyName("Przelew zewnętrzny")
+                .counterpartyIban(senderIban)
                 .build());
 
         log.info("Zaksięgowano przelew przychodzący: {} dla konta {}", moneyAmount, receiverIban);
