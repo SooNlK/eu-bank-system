@@ -37,6 +37,15 @@ app:
     base-url: ${CARD_NETWORK_BASE_URL:http://localhost:8072}
     api-key: ${CARD_NETWORK_API_KEY:bank-key-eu-a}
     hmac-secret: ${CARD_NETWORK_HMAC_SECRET:secret-eu-a-hmac}
+  eu-payments:
+    target-url: ${TARGET_URL:http://localhost:8001}
+    sepa-batch-url: ${SEPA_BATCH_URL:http://localhost:8002}
+    sepa-instant-url: ${SEPA_INSTANT_URL:http://localhost:8003}
+    bank-bic: ${BANK_BIC:BANKDEXX}
+    bank-name: ${BANK_NAME:Deutsche Bank}
+    initial-liquidity: ${INITIAL_LIQUIDITY:1000000.00}
+    webhook-secret: ${WEBHOOK_SECRET:my-secret-key}
+    webhook-url: ${WEBHOOK_URL:}
 
 springdoc:
   api-docs:

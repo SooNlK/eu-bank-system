@@ -18,5 +18,8 @@ public record TransferRequest(
         @Schema(description = "Waluta", example = "EUR") @NotBlank String currency,
         @Schema(description = "Data waluty", example = "2026-05-18") LocalDate valueDate,
         @Schema(description = "Kanał przelewu") @NotNull TransferChannel channel,
-        @Schema(description = "Tytuł przelewu", example = "Opłata za usługę") String description
+        @Schema(description = "Tytuł przelewu", example = "Opłata za usługę") String description,
+        @Schema(description = "BIC / SWIFT banku odbiorcy (wymagany dla TARGET)", example = "BANKDEXX") String toBic,
+        @Schema(description = "Nazwa odbiorcy (dla przelewów zewnętrznych)", example = "Jan Kowalski") String beneficiaryName
 ) {}
+

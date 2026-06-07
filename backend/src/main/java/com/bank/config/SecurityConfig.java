@@ -54,7 +54,8 @@ public class SecurityConfig {
                                 "/webjars/**",
                                 "/api/v1/authorize",
                                 "/api/v1/capture",
-                                "/api/v1/refund"
+                                "/api/v1/refund",
+                                "/api/v1/target-settlement"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )

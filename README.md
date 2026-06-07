@@ -161,27 +161,38 @@ erDiagram
     ACCOUNTS ||--o{ ACCOUNTS : parent_child
 ``` 
 
-## Uruchomienie aplikacji
+## Uruchomienie aplikacji i ekosystemu płatności
 
-Aby uruchomić aplikację w środowisku developerskim, upewnij się, że posiadasz zainstalowane narzędzia Docker oraz Docker Compose.
+Aby uruchomić aplikację w środowisku developerskim, upewnij się, że posiadasz zainstalowane narzędzia **Docker** oraz **Docker Compose**.
 
-1. Sklonuj repozytorium:
+Do przetestowania przelewów zewnętrznych wymagane jest uruchomienie **Banku** oraz centralnego **Symulatora płatności (Payment Infra)**.
+
+### Krok 1: Uruchomienie infrastruktury płatności (Symulatora)
+Przelewy realizowane są za pośrednictwem symulatora TARGET/SEPA.
+1. Wejdź do katalogu symulatora (np. `eu-payments-units`):
    ```bash
-    git clone https://github.com/SooNlK/eu-bank-system.git
-    cd eu-bank-system
+   cd ../eu-payments-units
    ```
+2. Uruchom usługi symulatora:
+   ```bash
+   docker compose up -d --build
+   ```
+   *Salda banków i webhooki są rejestrowane w bazie symulatora automatycznie podczas startu backendu banku.*
 
-2. Skonfiguruj zmienne środowiskowe:
-    ```bash
-    cp .env.example .env
-    ```
-    *Ewentualnie dostosuj wartości takie jak hasła czy loginy w pliku `.env`.*
-
-4. Uruchom kontenery przy użyciu dokera:
-    ```bash
-    docker-compose up --build
-    ```
-4. Aplikacja powinna być dostępna:
-    - Frontend pod adresem: `http://localhost:<PORT_Z_ENV>` (domyślnie: np. 80 / 3000 w zależności od vity/nginx)
-    - Backend pod adresem: `http://localhost:<PORT_Z_ENV>` (domyślnie: 8080)
-    - Baza Danych (Port mapowany: `5432`)
+### Krok 2: Uruchomienie banku
+1. Wejdź do katalogu `eu-bank-system`:
+   ```bash
+   cd ../eu-bank-system
+   ```
+2. Skonfiguruj plik ze zmiennymi środowiskowymi (wersja domyślna):
+   ```bash
+   cp .env.example .env
+   ```
+3. Uruchom kontenery banku:
+   ```bash
+   docker compose up -d --build
+   ```
+4. Aplikacja będzie dostępna pod adresami:
+   - **Frontend**: [http://localhost:3000](http://localhost:3000)
+   - **Backend**: [http://localhost:8080](http://localhost:8080)
+   - **Baza danych**: Port `5433` (zgodnie z `DB_HOST_PORT`)

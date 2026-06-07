@@ -14,6 +14,9 @@ public record TransferResponse(
         @Schema(description = "UUID przelewu") UUID id,
         @Schema(description = "UUID rachunku źródłowego") UUID fromAccountId,
         @Schema(description = "UUID rachunku docelowego (jeśli wewnętrzny)") UUID toAccountId,
+        @Schema(description = "IBAN odbiorcy zewnętrznego (jeśli SEPA/TARGET)") String toIban,
+        @Schema(description = "BIC banku odbiorcy") String toBic,
+        @Schema(description = "Nazwa odbiorcy") String beneficiaryName,
         @Schema(description = "Kwota") BigDecimal amount,
         @Schema(description = "Waluta") String currency,
         @Schema(description = "Kanał przelewu") TransferChannel channel,
@@ -24,3 +27,4 @@ public record TransferResponse(
         @Schema(description = "Data zlecenia") LocalDateTime createdAt,
         @Schema(description = "Data realizacji") LocalDateTime completedAt
 ) {}
+

@@ -78,6 +78,53 @@ export async function createInternalTransfer({ fromAccountId, toIban, amount, cu
     return response.json()
 }
 
+/**
+ * Wysyła przelew zewnętrzny (SEPA / SEPA_INSTANT / TARGET) do symulatora EU Payments.
+ * @param {Object} opts
+ * @param {string} opts.fromAccountId - UUID rachunku źródłowego
+ * @param {string} opts.toIban        - IBAN odbiorcy
+ * @param {string} opts.toBic         - BIC banku odbiorcy (wymagany dla TARGET)
+ * @param {string} opts.beneficiaryName - Nazwa odbiorcy
+ * @param {number} opts.amount        - Kwota
+ * @param {string} opts.currency      - Waluta (np. "EUR")
+ * @param {string} opts.channel       - "SEPA" | "SEPA_INSTANT" | "TARGET"
+ * @param {string} [opts.valueDate]   - Data waluty (ISO 8601, opcjonalna)
+ * @param {string} [opts.description] - Tytuł przelewu
+ */
+export async function createExternalTransfer({
+    fromAccountId,
+    toIban,
+    toBic,
+    beneficiaryName,
+    amount,
+    currency,
+    channel,
+    valueDate,
+    description,
+}) {
+    const response = await fetch("/api/transfers", {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify({
+            fromAccountId,
+            toIban,
+            toBic: toBic || null,
+            beneficiaryName: beneficiaryName || null,
+            amount,
+            currency: currency || "EUR",
+            channel,
+            valueDate: valueDate || null,
+            description: description || null,
+        }),
+    })
+
+    if (!response.ok) {
+        throw new Error(await readError(response))
+    }
+    return response.json()
+}
+
+
 export async function getJuniorAccounts() {
     const response = await fetch("/api/accounts/junior", {
         headers: getHeaders(),

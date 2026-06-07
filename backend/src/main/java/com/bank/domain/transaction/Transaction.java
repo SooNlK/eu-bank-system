@@ -50,6 +50,12 @@ public class Transaction {
     @Column(name = "reference_id", length = 255)
     private String referenceId;
 
+    @Column(name = "counterparty_name", length = 255)
+    private String counterpartyName;
+
+    @Column(name = "counterparty_iban", length = 34)
+    private String counterpartyIban;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

@@ -32,9 +32,22 @@ public class Transfer extends AbstractAggregateRoot<Transfer> {
     @JoinColumn(name = "from_account_id", nullable = false)
     private Account fromAccount;
 
+    /** Wypełniony tylko dla przelewów INTERNAL – konto odbiorcy w naszym banku */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "to_account_id")
     private Account toAccount;
+
+    /** IBAN zewnętrznego odbiorcy (SEPA / SEPA_INSTANT / TARGET) */
+    @Column(name = "to_iban", length = 34)
+    private String toIban;
+
+    /** BIC banku zewnętrznego odbiorcy */
+    @Column(name = "to_bic", length = 11)
+    private String toBic;
+
+    /** Nazwa zewnętrznego odbiorcy */
+    @Column(name = "beneficiary_name", length = 255)
+    private String beneficiaryName;
 
     @Embedded
     @AttributeOverrides({
@@ -80,3 +93,4 @@ public class Transfer extends AbstractAggregateRoot<Transfer> {
     @Column(name = "rejected_at")
     private LocalDateTime rejectedAt;
 }
+

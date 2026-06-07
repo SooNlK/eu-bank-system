@@ -10,8 +10,13 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.bank.domain.transfer.TransferChannel;
+import com.bank.domain.transfer.TransferStatus;
+
 @Repository
 public interface TransferRepository extends JpaRepository<Transfer, UUID> {
+
+    List<Transfer> findByChannelAndStatus(TransferChannel channel, TransferStatus status);
 
     @Query("""
             select t from Transfer t

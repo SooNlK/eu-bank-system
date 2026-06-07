@@ -54,10 +54,10 @@ public class TransactionService {
     }
 
     private TransactionResponse mapToResponse(Transaction transaction) {
-        String counterpartyName = null;
-        String counterpartyIban = null;
+        String counterpartyName = transaction.getCounterpartyName();
+        String counterpartyIban = transaction.getCounterpartyIban();
 
-        if (transaction.getReferenceId() != null) {
+        if (counterpartyName == null && counterpartyIban == null && transaction.getReferenceId() != null) {
             try {
                 UUID transferId = UUID.fromString(transaction.getReferenceId());
                 Optional<Transfer> transferOpt = transferRepository.findById(transferId);
@@ -72,6 +72,9 @@ public class TransactionService {
                             if (transfer.getToAccount().getAccountNumber() != null) {
                                 counterpartyIban = transfer.getToAccount().getAccountNumber().getValue();
                             }
+                        } else {
+                            counterpartyName = transfer.getBeneficiaryName();
+                            counterpartyIban = transfer.getToIban();
                         }
                     } else if (transaction.getType() == TransactionType.CREDIT) {
                         if (transfer.getFromAccount() != null) {
