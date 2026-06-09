@@ -2,8 +2,10 @@ package com.bank.service;
 
 import com.bank.client.cardnetwork.CardNetworkClient;
 import com.bank.client.cardnetwork.CardNetworkCardResponse;
+import com.bank.client.cardnetwork.CardNetworkFullPanResponse;
 import com.bank.client.cardnetwork.CardNetworkIssueResponse;
 import com.bank.client.cardnetwork.CardNetworkStatusResponse;
+import java.util.Map;
 import com.bank.domain.account.Account;
 import com.bank.domain.card.Card;
 import com.bank.domain.card.CardStatus;
@@ -73,6 +75,15 @@ public class CardService {
         }
 
         Account account = accountService.getAccountEntity(request.accountId(), email);
+        Customer customer = customerRepository.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Klient nie został znaleziony."));
+
+        if (account.getType() == com.bank.domain.account.AccountType.JUNIOR) {
+            if (account.getCustomer().getId().equals(customer.getId())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Dziecko nie może zamawiać kart.");
+            }
+        }
+
         BigDecimal initialBalance = request.initialBalance() == null ? BigDecimal.ZERO : request.initialBalance();
 
         CardNetworkIssueResponse networkResponse;
@@ -157,6 +168,20 @@ public class CardService {
     @Transactional
     public CardResponse updateLimits(UUID cardId, BigDecimal dailyLimit, BigDecimal monthlyLimit, String email) {
         Card card = getAccessibleCard(cardId, email);
+
+        if (card.getType() == CardType.PREPAID) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nie można zmieniać limitów dla kart prepaid.");
+        }
+
+        Customer customer = customerRepository.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Klient nie został znaleziony."));
+
+        if (card.getAccount().getType() == com.bank.domain.account.AccountType.JUNIOR) {
+            if (card.getAccount().getCustomer().getId().equals(customer.getId())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Dziecko nie może zmieniać limitów karty.");
+            }
+        }
+
         String currency = card.getAccount().getBalance().getCurrency();
 
         if (dailyLimit != null) {
@@ -169,6 +194,28 @@ public class CardService {
         }
 
         return mapToResponse(card);
+    }
+
+    @Transactional
+    public Map<String, Object> getSensitiveDetails(UUID cardId, String email) {
+        Card card = getAccessibleCard(cardId, email);
+        requireExternalToken(card);
+
+        try {
+            CardNetworkFullPanResponse response = cardNetworkClient.getFullPan(card.getExternalCardToken());
+            if (response == null) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Brak szczegółów karty w sieci kartowej.");
+            }
+            return Map.of(
+                    "card", Map.of("id", card.getId()),
+                    "fullPan", response.fullPan(),
+                    "cvv", response.cvv(),
+                    "expiryMonth", response.expiryMonth(),
+                    "expiryYear", response.expiryYear()
+            );
+        } catch (Exception ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Nie można pobrać pełnych danych z sieci kartowej: " + ex.getMessage());
+        }
     }
 
     private Card getAccessibleCard(UUID cardId, String email) {

@@ -11,7 +11,9 @@ import com.bank.dto.cardnetwork.IssuerAuthorizationResponse;
 import com.bank.dto.cardnetwork.IssuerCaptureRequest;
 import com.bank.dto.cardnetwork.IssuerRefundRequest;
 import com.bank.dto.cardnetwork.IssuerStatusResponse;
+import com.bank.domain.card.Card;
 import com.bank.repository.AccountRepository;
+import com.bank.repository.CardRepository;
 import com.bank.repository.TransactionRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -29,10 +31,17 @@ public class CardIssuerService {
 
     private final AccountRepository accountRepository;
     private final TransactionRepository transactionRepository;
+    private final CardRepository cardRepository;
+    private final FxService fxService;
 
-    public CardIssuerService(AccountRepository accountRepository, TransactionRepository transactionRepository) {
+    public CardIssuerService(AccountRepository accountRepository,
+                             TransactionRepository transactionRepository,
+                             CardRepository cardRepository,
+                             FxService fxService) {
         this.accountRepository = accountRepository;
         this.transactionRepository = transactionRepository;
+        this.cardRepository = cardRepository;
+        this.fxService = fxService;
     }
 
     @Transactional
@@ -48,27 +57,41 @@ public class CardIssuerService {
         }
 
         String currency = normalizeCurrency(request.currency());
-        if (!account.getBalance().getCurrency().equals(currency)) {
+        String accountCurrency = account.getBalance().getCurrency();
+
+        BigDecimal convertedAmountVal;
+        try {
+            if (accountCurrency.equals(currency)) {
+                convertedAmountVal = request.amount();
+            } else {
+                convertedAmountVal = fxService.convert(request.amount(), currency, accountCurrency);
+            }
+        } catch (Exception e) {
             return declined("CURRENCY_MISMATCH");
         }
 
         BigDecimal available = account.getBalance().getAmount().subtract(account.getReservedBalance().getAmount());
-        if (available.compareTo(request.amount()) < 0) {
+        if (available.compareTo(convertedAmountVal) < 0) {
             return declined("INSUFFICIENT_FUNDS");
         }
 
         String authorizationCode = "AUTH-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-        Money amount = Money.of(request.amount(), currency);
+        Money amount = Money.of(convertedAmountVal, accountCurrency);
 
         account.setReservedBalance(account.getReservedBalance().add(amount));
         accountRepository.save(account);
+
+        String txDesc = "Autoryzacja płatności kartą";
+        if (!accountCurrency.equals(currency)) {
+            txDesc += " (" + request.amount() + " " + currency + ")";
+        }
 
         transactionRepository.save(Transaction.builder()
                 .account(account)
                 .amount(amount)
                 .type(TransactionType.DEBIT)
                 .status(TransactionStatus.PENDING)
-                .description(cardDescription("Autoryzacja płatności kartą", request.merchantName()))
+                .description(cardDescription(txDesc, request.merchantName()))
                 .referenceId(authReference(authorizationCode))
                 .build());
 
@@ -78,34 +101,84 @@ public class CardIssuerService {
     @Transactional
     public IssuerStatusResponse capture(IssuerCaptureRequest request) {
         Transaction transaction = transactionRepository.findByReferenceId(authReference(request.authorizationCode()))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Autoryzacja nie istnieje."));
+                .orElse(null);
 
-        if (transaction.getStatus() == TransactionStatus.COMPLETED) {
+        if (transaction != null) {
+            if (transaction.getStatus() == TransactionStatus.COMPLETED) {
+                return new IssuerStatusResponse("SETTLED");
+            }
+            if (transaction.getStatus() != TransactionStatus.PENDING) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Autoryzacja nie oczekuje na capture.");
+            }
+
+            Account account = transaction.getAccount();
+            Money amount = transaction.getAmount();
+
+            if (account.getReservedBalance().getAmount().compareTo(amount.getAmount()) < 0) {
+                transaction.setStatus(TransactionStatus.FAILED);
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Brak zarezerwowanych środków dla autoryzacji.");
+            }
+            if (account.getBalance().getAmount().compareTo(amount.getAmount()) < 0) {
+                transaction.setStatus(TransactionStatus.FAILED);
+                account.setReservedBalance(account.getReservedBalance().subtract(amount));
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Brak środków do rozliczenia transakcji.");
+            }
+
+            account.setReservedBalance(account.getReservedBalance().subtract(amount));
+            account.setBalance(account.getBalance().subtract(amount));
+            transaction.setStatus(TransactionStatus.COMPLETED);
+
+            accountRepository.save(account);
+            return new IssuerStatusResponse("SETTLED");
+        } else {
+            // Direct Capture Flow (offline / POS payment without prior authorization)
+            if (request.cardToken() == null || request.amount() == null || request.currency() == null) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Autoryzacja nie istnieje i brakuje danych do obciążenia bezpośredniego.");
+            }
+
+            Card card = cardRepository.findByExternalCardToken(request.cardToken())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Karta nie istnieje w banku."));
+
+            Account account = card.getAccount();
+            if (account.getStatus() != AccountStatus.ACTIVE) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Rachunek powiązany z kartą jest zablokowany.");
+            }
+
+            String currency = normalizeCurrency(request.currency());
+            String accountCurrency = account.getBalance().getCurrency();
+
+            BigDecimal convertedAmountVal;
+            if (accountCurrency.equals(currency)) {
+                convertedAmountVal = request.amount();
+            } else {
+                convertedAmountVal = fxService.convert(request.amount(), currency, accountCurrency);
+            }
+
+            Money amount = Money.of(convertedAmountVal, accountCurrency);
+            BigDecimal available = account.getBalance().getAmount().subtract(account.getReservedBalance().getAmount());
+            if (available.compareTo(convertedAmountVal) < 0) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Brak wystarczających środków na rachunku.");
+            }
+
+            account.setBalance(account.getBalance().subtract(amount));
+            accountRepository.save(account);
+
+            String txDesc = "Rozliczenie płatności kartą (POS)";
+            if (!accountCurrency.equals(currency)) {
+                txDesc += " (" + request.amount() + " " + currency + ")";
+            }
+
+            transactionRepository.save(Transaction.builder()
+                    .account(account)
+                    .amount(amount)
+                    .type(TransactionType.DEBIT)
+                    .status(TransactionStatus.COMPLETED)
+                    .description(cardDescription(txDesc, request.merchantId()))
+                    .referenceId(authReference(request.authorizationCode()))
+                    .build());
+
             return new IssuerStatusResponse("SETTLED");
         }
-        if (transaction.getStatus() != TransactionStatus.PENDING) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Autoryzacja nie oczekuje na capture.");
-        }
-
-        Account account = transaction.getAccount();
-        Money amount = transaction.getAmount();
-
-        if (account.getReservedBalance().getAmount().compareTo(amount.getAmount()) < 0) {
-            transaction.setStatus(TransactionStatus.FAILED);
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Brak zarezerwowanych środków dla autoryzacji.");
-        }
-        if (account.getBalance().getAmount().compareTo(amount.getAmount()) < 0) {
-            transaction.setStatus(TransactionStatus.FAILED);
-            account.setReservedBalance(account.getReservedBalance().subtract(amount));
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Brak środków do rozliczenia transakcji.");
-        }
-
-        account.setReservedBalance(account.getReservedBalance().subtract(amount));
-        account.setBalance(account.getBalance().subtract(amount));
-        transaction.setStatus(TransactionStatus.COMPLETED);
-
-        accountRepository.save(account);
-        return new IssuerStatusResponse("SETTLED");
     }
 
     @Transactional

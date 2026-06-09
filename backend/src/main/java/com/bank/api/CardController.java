@@ -79,6 +79,14 @@ public class CardController {
         return ResponseEntity.ok(cardService.getById(cardId, authentication.getName()));
     }
 
+    @GetMapping("/{cardId}/sensitive")
+    @Operation(summary = "Pobierz pełne dane karty (PAN, CVV, data ważności)")
+    public ResponseEntity<Map<String, Object>> getSensitiveCard(
+            @Parameter(description = "UUID karty") @PathVariable UUID cardId,
+            Authentication authentication) {
+        return ResponseEntity.ok(cardService.getSensitiveDetails(cardId, authentication.getName()));
+    }
+
     @PostMapping("/{cardId}/block")
     @Operation(summary = "Zablokowanie karty",
             description = "Natychmiast blokuje kartę. Operacja jest nieodwracalna bez kontaktu z bankiem.")

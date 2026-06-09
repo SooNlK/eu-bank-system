@@ -13,6 +13,7 @@ import com.bank.dto.cardnetwork.IssuerAuthorizationResponse;
 import com.bank.dto.cardnetwork.IssuerCaptureRequest;
 import com.bank.dto.cardnetwork.IssuerRefundRequest;
 import com.bank.repository.AccountRepository;
+import com.bank.repository.CardRepository;
 import com.bank.repository.CustomerRepository;
 import com.bank.repository.TransactionRepository;
 import org.junit.jupiter.api.Test;
@@ -42,6 +43,9 @@ class CardIssuerServiceTest {
 
     @Autowired
     private TransactionRepository transactionRepository;
+
+    @Autowired
+    private CardRepository cardRepository;
 
     @Autowired
     private GermanIbanGenerator ibanGenerator;
@@ -111,6 +115,49 @@ class CardIssuerServiceTest {
 
         Account refundedAccount = accountRepository.findById(account.getId()).orElseThrow();
         assertThat(refundedAccount.getBalance().getAmount()).isEqualByComparingTo("125.00");
+    }
+
+    @Test
+    void shouldDirectCaptureCardPaymentWithoutPriorAuthorization() {
+        Customer customer = createCustomer("card-direct-capture@example.test");
+        Account account = createAccount(customer, new BigDecimal("300.00"));
+        String cardToken = "token-direct-capture-test";
+
+        // Save card to DB
+        cardRepository.save(com.bank.domain.card.Card.builder()
+                .account(account)
+                .externalCardToken(cardToken)
+                .maskedPan("4100 01** **** 1296")
+                .last4("1296")
+                .type(com.bank.domain.card.CardType.VIRTUAL)
+                .status(com.bank.domain.card.CardStatus.ACTIVE)
+                .expiresAt(java.time.LocalDate.now().plusYears(3))
+                .dailyLimit(Money.of(new BigDecimal("1000.00"), "EUR"))
+                .monthlyLimit(Money.of(new BigDecimal("5000.00"), "EUR"))
+                .build());
+
+        UUID networkTransactionId = UUID.randomUUID();
+        String authorizationCode = "AUTH-DIRECT-123";
+
+        // Call capture directly without prior authorize() call
+        cardIssuerService.capture(new IssuerCaptureRequest(
+                authorizationCode,
+                networkTransactionId,
+                new BigDecimal("75.20"),
+                "EUR",
+                "MERCH-POS-1",
+                cardToken
+        ));
+
+        Account capturedAccount = accountRepository.findById(account.getId()).orElseThrow();
+        assertThat(capturedAccount.getBalance().getAmount()).isEqualByComparingTo("224.80");
+        assertThat(capturedAccount.getReservedBalance().getAmount()).isEqualByComparingTo("0.00");
+
+        // Verify transaction exists with status COMPLETED
+        assertThat(transactionRepository.findByReferenceId("CARD_AUTH:" + authorizationCode))
+                .get()
+                .extracting(transaction -> transaction.getStatus())
+                .isEqualTo(TransactionStatus.COMPLETED);
     }
 
     private Customer createCustomer(String email) {

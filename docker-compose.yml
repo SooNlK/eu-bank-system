@@ -60,7 +60,20 @@ services:
     depends_on:
       - backend
 
+  euro-bank-a:
+    image: alpine/socat
+    container_name: euro-bank-a
+    command: tcp-listen:8000,fork,reuseaddr tcp-connect:backend:8080
+    depends_on:
+      - backend
+    networks:
+      - default
+      - cards-backend
+
 networks:
+  cards-backend:
+    name: cards-backend
+    external: true
   eu-payments-units_payment_network:
     external: true
 

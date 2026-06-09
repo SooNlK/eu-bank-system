@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { activateCard, blockCard, getCards, getMyAccounts, getJuniorAccounts, issueCard, unblockCard, updateCardLimits } from '../services/account'
+import { activateCard, blockCard, getCards, getMyAccounts, getJuniorAccounts, issueCard, unblockCard, updateCardLimits, fetchSensitiveCardDetails } from '../services/account'
 
 const CARD_TYPES = [
     { value: 'VIRTUAL', label: 'Wirtualna' },
@@ -78,6 +78,24 @@ export default function CardsPanel() {
     useEffect(() => {
         loadData()
     }, [])
+
+    useEffect(() => {
+        if (selectedCardId) {
+            loadSensitiveDetails(selectedCardId)
+        } else {
+            setSensitiveCard(null)
+        }
+    }, [selectedCardId])
+
+    async function loadSensitiveDetails(cardId) {
+        try {
+            const details = await fetchSensitiveCardDetails(cardId)
+            setSensitiveCard(details)
+        } catch (error) {
+            console.error("Failed to load sensitive card details:", error)
+            setSensitiveCard(null)
+        }
+    }
 
     async function loadData() {
         setLoading(true)
@@ -511,6 +529,13 @@ function CardDetailsPanel({ card, sensitiveCard, onActivate, onBlock, onUnblock,
     const [editDaily, setEditDaily] = useState(card.dailyLimit || '')
     const [editMonthly, setEditMonthly] = useState(card.monthlyLimit || '')
     const [saving, setSaving] = useState(false)
+    const [copied, setCopied] = useState(false)
+
+    function handleCopy(text) {
+        navigator.clipboard.writeText(text)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+    }
 
     useEffect(() => {
         setEditDaily(card.dailyLimit || '')
@@ -627,7 +652,22 @@ function CardDetailsPanel({ card, sensitiveCard, onActivate, onBlock, onUnblock,
                             <div className="px-5 mt-2 flex justify-between items-center w-full text-left">
                                 <div>
                                     <p className="text-[6px] text-white/45 uppercase tracking-widest font-sans">Numer karty</p>
-                                    <p className="font-mono text-[11px] text-white font-semibold tracking-wider select-all">{formattedPan}</p>
+                                    <p className="font-mono text-[11px] text-white font-semibold tracking-wider select-all flex items-center gap-1.5">
+                                        {formattedPan}
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleCopy(credentials.fullPan.replace(/\s/g, ''));
+                                            }}
+                                            className="p-1 hover:bg-white/10 rounded text-white/60 hover:text-white transition-colors cursor-pointer flex items-center justify-center border-none bg-transparent"
+                                            title="Skopiuj numer karty"
+                                        >
+                                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                                            </svg>
+                                        </button>
+                                    </p>
                                 </div>
                                 <div className="text-right">
                                     <p className="text-[6px] text-white/45 uppercase tracking-widest font-sans">Ważna do</p>
