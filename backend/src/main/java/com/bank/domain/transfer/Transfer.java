@@ -92,5 +92,39 @@ public class Transfer extends AbstractAggregateRoot<Transfer> {
 
     @Column(name = "rejected_at")
     private LocalDateTime rejectedAt;
+
+    // ===== Pola specyficzne dla przelewów SWIFT =====
+
+    /** ID wiadomości pacs.008 wysłanej do symulatora SWIFT */
+    @Column(name = "swift_msg_id", length = 64)
+    private String swiftMsgId;
+
+    /** UETR – Unique End-to-End Transaction Reference (UUID) */
+    @Column(name = "swift_uetr", length = 36)
+    private String swiftUetr;
+
+    /** Podział opłat: SHA/OUR/BEN/CRED */
+    @Column(name = "swift_charge_bearer", length = 4)
+    private String swiftChargeBearer;
+
+    /** Trasa jako JSON array: ["BANKDEXX","UKBKGB01XXX","USBKUS01XXX"] */
+    @Column(name = "swift_route", columnDefinition = "TEXT")
+    private String swiftRoute;
+
+    /** Opłata SWIFT pobrana od klienta (w EUR) */
+    @Column(name = "swift_fee", precision = 19, scale = 4)
+    private BigDecimal swiftFee;
+
+    /** Kurs wymiany EUR → waluta docelowa */
+    @Column(name = "swift_fx_rate", precision = 19, scale = 8)
+    private BigDecimal swiftFxRate;
+
+    /** Waluta docelowa SWIFT (np. USD, GBP) */
+    @Column(name = "swift_target_currency", length = 3)
+    private String swiftTargetCurrency;
+
+    /** Czy przelew był odwołany (Recall) */
+    @Column(name = "swift_recalled", nullable = false)
+    private boolean swiftRecalled = false;
 }
 

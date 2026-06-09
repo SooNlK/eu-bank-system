@@ -92,11 +92,23 @@ const CONFIGS = {
                 <path d="M3 9h18M9 21V9" stroke="#9333ea" strokeWidth="1.8" />
             </svg>
         )
+    },
+    swift: {
+        title: 'Przelew SWIFT',
+        iconBg: 'bg-orange-50',
+        icon: (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="9" stroke="#ea580c" strokeWidth="1.8" />
+                <path d="M2 12h20M12 3c-2.5 3-4 5.5-4 9s1.5 6 4 9M12 3c2.5 3 4 5.5 4 9s-1.5 6-4 9" stroke="#ea580c" strokeWidth="1.8" />
+            </svg>
+        )
     }
 }
 
 export default function TransferPanel({ onClose, initialType = 'sepa', onDashboardReturn }) {
     const selected = initialType
+    const isSwift = selected === 'swift'
+
     const [form, setForm] = useState({
         beneficiaryName: '',
         iban: '',
@@ -106,6 +118,8 @@ export default function TransferPanel({ onClose, initialType = 'sepa', onDashboa
         executionDate: '',
         valueDate: '',
         uetr: '',
+        chargeBearer: 'SHAR',
+        swiftTargetCurrency: 'EUR',
     })
     const [accounts, setAccounts] = useState([])
     const [fromId, setFromId] = useState('')
@@ -136,7 +150,7 @@ export default function TransferPanel({ onClose, initialType = 'sepa', onDashboa
     const amountNum = parseFloat(form.amount)
     const isAmountValid = !isNaN(amountNum) && amountNum > 0
     const isOverBalance = Boolean(fromAccount) && isAmountValid && amountNum > fromAccount.balance
-    
+
     // For SEPA Instant, there's a limit of 100 000 EUR
     const isOverLimit = selected === 'instant' && amountNum > 100000
 
@@ -150,11 +164,11 @@ export default function TransferPanel({ onClose, initialType = 'sepa', onDashboa
         setError('')
 
         // Ustal kanał płatności
-        const channelMap = { sepa: 'SEPA', instant: 'SEPA_INSTANT', target: 'TARGET' }
+        const channelMap = { sepa: 'SEPA', instant: 'SEPA_INSTANT', target: 'TARGET', swift: 'SWIFT' }
         const channel = channelMap[selected] || 'SEPA'
 
         try {
-            const result = await createExternalTransfer({
+            const payload = {
                 fromAccountId: fromId,
                 toIban: form.iban,
                 toBic: form.bic || null,
@@ -164,7 +178,14 @@ export default function TransferPanel({ onClose, initialType = 'sepa', onDashboa
                 channel,
                 valueDate: form.executionDate || form.valueDate || null,
                 description: form.remittance || null,
-            })
+            }
+
+            if (isSwift) {
+                payload.chargeBearer = form.chargeBearer
+                payload.swiftTargetCurrency = form.swiftTargetCurrency
+            }
+
+            const result = await createExternalTransfer(payload)
 
             setTransfer({
                 id: result.id,
@@ -173,6 +194,11 @@ export default function TransferPanel({ onClose, initialType = 'sepa', onDashboa
                 status: result.status,
                 channel: result.channel,
                 externalRef: result.id,
+                // SWIFT-specific fields
+                swift_route: result.swift_route ?? null,
+                swift_fee: result.swift_fee ?? null,
+                swift_fx_rate: result.swift_fx_rate ?? null,
+                swift_target_currency: result.swift_target_currency ?? null,
             })
 
             // Odśwież saldo lokalnie (backend już je zaktualizował)
@@ -191,6 +217,7 @@ export default function TransferPanel({ onClose, initialType = 'sepa', onDashboa
         const completed = transfer.status === 'COMPLETED'
         const pendingApproval = transfer.status === 'PENDING_APPROVAL'
         const processing = transfer.status === 'PROCESSING' // SEPA Batch – w kolejce
+        const isSwiftTransfer = transfer.channel === 'SWIFT'
 
         let statusBg = 'bg-red-50'
         let statusStroke = '#dc2626'
@@ -207,7 +234,7 @@ export default function TransferPanel({ onClose, initialType = 'sepa', onDashboa
         } else if (processing) {
             statusBg = 'bg-blue-50'
             statusStroke = '#2563eb'
-            statusTitle = 'Przelew w kolejce SEPA ⏳'
+            statusTitle = isSwiftTransfer ? 'Przelew SWIFT w trakcie realizacji ⏳' : 'Przelew w kolejce SEPA ⏳'
         }
 
         return (
@@ -232,13 +259,13 @@ export default function TransferPanel({ onClose, initialType = 'sepa', onDashboa
                 <p className="text-[15px] font-semibold text-slate-800">
                     {statusTitle}
                 </p>
-                <div className="text-[12px] text-slate-500 text-center max-w-[280px]">
+                <div className="text-[12px] text-slate-500 text-center max-w-[320px]">
                     {pendingApproval ? (
                         <p className="leading-relaxed">
                             Przelew oczekuje na zatwierdzenie przez rodzica! 🧸📱<br />
                             Kwota: <strong className="text-slate-800">{formatCurrency(transfer.amount, transfer.currency)}</strong>.
                         </p>
-                    ) : processing ? (
+                    ) : processing && !isSwiftTransfer ? (
                         <p className="leading-relaxed">
                             Przelew SEPA przyjęty do rozliczenia.<br />
                             Kwota: <strong className="text-slate-800">{formatCurrency(transfer.amount, transfer.currency)}</strong>.<br />
@@ -252,6 +279,37 @@ export default function TransferPanel({ onClose, initialType = 'sepa', onDashboa
                     )}
                 </div>
 
+                {/* SWIFT details block */}
+                {isSwiftTransfer && (transfer.swift_route || transfer.swift_fee != null || transfer.swift_fx_rate != null || transfer.swift_target_currency) && (
+                    <div className="w-full max-w-[320px] bg-orange-50 border border-orange-100 rounded-[11px] px-4 py-3 mt-1 space-y-2">
+                        <p className="text-[11px] font-semibold text-orange-700 uppercase tracking-wide mb-1">Szczegóły SWIFT</p>
+                        {transfer.swift_route && (
+                            <div className="flex justify-between items-start gap-2">
+                                <span className="text-[11px] text-slate-500 shrink-0">Trasa</span>
+                                <span className="text-[11px] text-slate-800 font-mono text-right break-all">{transfer.swift_route}</span>
+                            </div>
+                        )}
+                        {transfer.swift_fee != null && (
+                            <div className="flex justify-between items-center gap-2">
+                                <span className="text-[11px] text-slate-500 shrink-0">Opłata SWIFT</span>
+                                <span className="text-[11px] text-slate-800 font-medium">{formatCurrency(transfer.swift_fee, transfer.currency)}</span>
+                            </div>
+                        )}
+                        {transfer.swift_fx_rate != null && (
+                            <div className="flex justify-between items-center gap-2">
+                                <span className="text-[11px] text-slate-500 shrink-0">Kurs wymiany</span>
+                                <span className="text-[11px] text-slate-800 font-medium">{transfer.swift_fx_rate}</span>
+                            </div>
+                        )}
+                        {transfer.swift_target_currency && (
+                            <div className="flex justify-between items-center gap-2">
+                                <span className="text-[11px] text-slate-500 shrink-0">Waluta docelowa</span>
+                                <span className="text-[11px] text-slate-800 font-medium">{transfer.swift_target_currency}</span>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 <div className="flex gap-3 mt-4 w-full px-4 sm:px-0 sm:w-auto">
                     <button
                         onClick={() => {
@@ -264,6 +322,8 @@ export default function TransferPanel({ onClose, initialType = 'sepa', onDashboa
                                 executionDate: '',
                                 valueDate: '',
                                 uetr: '',
+                                chargeBearer: 'SHAR',
+                                swiftTargetCurrency: 'EUR',
                             });
                             setTransfer(null);
                         }}
@@ -323,7 +383,10 @@ export default function TransferPanel({ onClose, initialType = 'sepa', onDashboa
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="sm:col-span-2">
-                            <label className={labelClass}>Nazwa odbiorcy</label>
+                            <label className={labelClass}>
+                                Nazwa odbiorcy
+                                {isSwift && <span className="text-red-500 font-normal"> *</span>}
+                            </label>
                             <input
                                 type="text"
                                 value={form.beneficiaryName}
@@ -334,20 +397,27 @@ export default function TransferPanel({ onClose, initialType = 'sepa', onDashboa
                             />
                         </div>
                         <div>
-                            <label className={labelClass}>IBAN odbiorcy</label>
+                            <label className={labelClass}>
+                                {isSwift ? 'Numer konta / IBAN odbiorcy' : 'IBAN odbiorcy'}
+                                {isSwift && <span className="text-slate-400 font-normal"> (IBAN lub lokalny numer)</span>}
+                            </label>
                             <input
                                 type="text"
                                 value={form.iban}
                                 onChange={set('iban')}
                                 className={inputClass}
                                 autoComplete="off"
+                                // For SWIFT, IBAN validation is relaxed – no pattern required
                                 required
                             />
+                            {isSwift && (
+                                <p className="text-[10px] text-slate-400 mt-1">Dla SWIFT akceptowany jest dowolny format konta (np. USA routing+account)</p>
+                            )}
                         </div>
                         <div>
                             <label className={labelClass}>
                                 BIC / SWIFT banku odbiorcy
-                                {selected === 'target' ? (
+                                {(selected === 'target' || isSwift) ? (
                                     <span className="text-red-500 font-normal"> *</span>
                                 ) : (
                                     <span className="text-slate-400 font-normal"> (zalecane)</span>
@@ -358,11 +428,13 @@ export default function TransferPanel({ onClose, initialType = 'sepa', onDashboa
                                 value={form.bic}
                                 onChange={set('bic')}
                                 className={inputClass}
-                                required={selected === 'target'}
+                                required={selected === 'target' || isSwift}
                             />
                         </div>
                         <div>
-                            <label className={labelClass}>Kwota (EUR)</label>
+                            <label className={labelClass}>
+                                Kwota ({isSwift ? (fromAccount?.currency || 'EUR') : 'EUR'})
+                            </label>
                             <input
                                 type="number"
                                 value={form.amount}
@@ -400,6 +472,48 @@ export default function TransferPanel({ onClose, initialType = 'sepa', onDashboa
                             )}
                         </div>
 
+                        {/* SWIFT-specific fields */}
+                        {isSwift && (
+                            <>
+                                <div>
+                                    <label className={labelClass}>
+                                        Podział opłat (Charge Bearer)
+                                        <span className="text-red-500 font-normal"> *</span>
+                                    </label>
+                                    <select
+                                        value={form.chargeBearer}
+                                        onChange={set('chargeBearer')}
+                                        className={inputClass}
+                                        required
+                                    >
+                                        <option value="SHAR">SHA – Podzielone</option>
+                                        <option value="DEBT">OUR – Nadawca pokrywa</option>
+                                        <option value="CRED">BEN – Odbiorca pokrywa</option>
+                                    </select>
+                                    <p className="text-[10px] text-slate-400 mt-1">
+                                        SHA: opłaty krajowe po stronie nadawcy, zagraniczne po stronie odbiorcy
+                                    </p>
+                                </div>
+                                <div>
+                                    <label className={labelClass}>
+                                        Waluta docelowa SWIFT
+                                        <span className="text-red-500 font-normal"> *</span>
+                                    </label>
+                                    <select
+                                        value={form.swiftTargetCurrency}
+                                        onChange={set('swiftTargetCurrency')}
+                                        className={inputClass}
+                                        required
+                                    >
+                                        <option value="EUR">EUR – Euro</option>
+                                        <option value="USD">USD – Dolar amerykański</option>
+                                        <option value="GBP">GBP – Funt brytyjski</option>
+                                        <option value="PLN">PLN – Złoty polski</option>
+                                    </select>
+                                </div>
+                            </>
+                        )}
+
                         {selected === 'sepa' && (
                             <div>
                                 <label className={labelClass}>Preferowana data realizacji</label>
@@ -412,8 +526,6 @@ export default function TransferPanel({ onClose, initialType = 'sepa', onDashboa
                                 <p className="text-[10px] text-slate-400 mt-1">Puste = najwcześniejsza możliwa data robocza</p>
                             </div>
                         )}
-
-
 
                         {selected === 'target' && (
                             <div>
@@ -446,7 +558,21 @@ export default function TransferPanel({ onClose, initialType = 'sepa', onDashboa
                         />
                     </div>
 
-
+                    {isSwift && (
+                        <div className="bg-orange-50 border border-orange-100 rounded-[9px] px-3 py-2.5">
+                            <p className="text-[11px] text-orange-700 font-medium flex items-center gap-1.5">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                                    <circle cx="12" cy="12" r="10" stroke="#ea580c" strokeWidth="2" />
+                                    <path d="M12 8v4m0 4h.01" stroke="#ea580c" strokeWidth="2" strokeLinecap="round" />
+                                </svg>
+                                Przelew SWIFT – informacje
+                            </p>
+                            <p className="text-[10px] text-orange-600 mt-1 leading-relaxed">
+                                Waluta zlecenia to zawsze waluta rachunku źródłowego ({fromAccount?.currency || 'EUR'}).
+                                Ewentualne przewalutowanie na walutę docelową nastąpi w banku korespondenta.
+                            </p>
+                        </div>
+                    )}
 
                     {error && (
                         <p className="text-[12px] text-red-600 bg-red-50 border border-red-100 rounded-[9px] px-3 py-2 font-medium">
