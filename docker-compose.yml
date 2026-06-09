@@ -37,6 +37,12 @@ services:
       BANK_NAME: ${BANK_NAME:-Deutsche Bank}
       INITIAL_LIQUIDITY: ${INITIAL_LIQUIDITY:-1000000.00}
       WEBHOOK_URL: http://eu-bank-backend:8080/api/v1/target-settlement
+      SWIFT_URL: ${SWIFT_URL:-http://host.docker.internal:3000}
+      SWIFT_CLIENT_ID: ${SWIFT_CLIENT_ID:-test-client}
+      SWIFT_CLIENT_SECRET: ${SWIFT_CLIENT_SECRET:-test-secret}
+      SWIFT_BANK_BIC: ${SWIFT_BANK_BIC:-BANKDEXX}
+      SWIFT_ENABLED: ${SWIFT_ENABLED:-true}
+      SWIFT_FEE_PERCENT: ${SWIFT_FEE_PERCENT:-0.01}
     depends_on:
       db:
         condition: service_healthy

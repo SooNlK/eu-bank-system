@@ -3,12 +3,16 @@ package com.bank.service;
 import com.bank.client.eupayments.IsoXmlBuilder;
 import com.bank.client.eupayments.SepaBatchClient;
 import com.bank.client.eupayments.SepaInstantClient;
+import com.bank.client.swift.Pacs008Builder;
+import com.bank.client.swift.SwiftClient;
 import com.bank.config.EuPaymentsProperties;
+import com.bank.config.SwiftProperties;
 import com.bank.domain.account.Account;
 import com.bank.domain.account.AccountStatus;
 import com.bank.domain.customer.Customer;
 import com.bank.domain.shared.IBAN;
 import com.bank.domain.shared.Money;
+import com.bank.domain.swift.CorrespondentAccount;
 import com.bank.domain.transaction.Transaction;
 import com.bank.domain.transaction.TransactionStatus;
 import com.bank.domain.transaction.TransactionType;
@@ -18,6 +22,7 @@ import com.bank.domain.transfer.TransferStatus;
 import com.bank.dto.transfer.TransferRequest;
 import com.bank.dto.transfer.TransferResponse;
 import com.bank.repository.AccountRepository;
+import com.bank.repository.CorrespondentAccountRepository;
 import com.bank.repository.TransactionRepository;
 import com.bank.repository.TransferRepository;
 import org.slf4j.Logger;
@@ -28,9 +33,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -40,6 +47,7 @@ public class TransferService {
 
     private static final BigDecimal APPROVAL_LIMIT = new BigDecimal("15000.00");
     private static final BigDecimal SEPA_INSTANT_LIMIT = new BigDecimal("100000.00");
+    private static final Set<String> SWIFT_CURRENCIES = Set.of("EUR", "USD", "GBP", "PLN", "CHF");
 
     private final TransferRepository transferRepository;
     private final AccountRepository accountRepository;
@@ -49,6 +57,10 @@ public class TransferService {
     private final SepaInstantClient sepaInstantClient;
     private final SepaBatchClient sepaBatchClient;
     private final EuPaymentsProperties euPaymentsProps;
+    private final SwiftClient swiftClient;
+    private final SwiftProperties swiftProperties;
+    private final FxService fxService;
+    private final CorrespondentAccountRepository correspondentAccountRepository;
 
     public TransferService(
             TransferRepository transferRepository,
@@ -58,7 +70,11 @@ public class TransferService {
             com.bank.repository.CustomerRepository customerRepository,
             SepaInstantClient sepaInstantClient,
             SepaBatchClient sepaBatchClient,
-            EuPaymentsProperties euPaymentsProps
+            EuPaymentsProperties euPaymentsProps,
+            SwiftClient swiftClient,
+            SwiftProperties swiftProperties,
+            FxService fxService,
+            CorrespondentAccountRepository correspondentAccountRepository
     ) {
         this.transferRepository = transferRepository;
         this.accountRepository = accountRepository;
@@ -68,15 +84,25 @@ public class TransferService {
         this.sepaInstantClient = sepaInstantClient;
         this.sepaBatchClient = sepaBatchClient;
         this.euPaymentsProps = euPaymentsProps;
+        this.swiftClient = swiftClient;
+        this.swiftProperties = swiftProperties;
+        this.fxService = fxService;
+        this.correspondentAccountRepository = correspondentAccountRepository;
     }
 
     @Transactional
     public TransferResponse execute(TransferRequest request, String email) {
         Account fromAccount = accountService.getAccountEntity(request.fromAccountId(), email);
-        String targetIban = normalizeIban(request.toIban());
         LocalDate valueDate = validateValueDate(request.valueDate(), request.channel());
         String currency = validateCurrency(request.currency());
         TransferChannel channel = request.channel();
+
+        // SWIFT ma własną ścieżkę (brak walidacji IBAN, własny FX)
+        if (channel == TransferChannel.SWIFT) {
+            return executeSwiftTransfer(request, fromAccount, currency, valueDate, email);
+        }
+
+        String targetIban = normalizeIban(request.toIban());
 
         boolean isExternal = channel == TransferChannel.SEPA
                 || channel == TransferChannel.SEPA_INSTANT
@@ -86,6 +112,159 @@ public class TransferService {
             return executeExternalTransfer(request, fromAccount, targetIban, currency, valueDate);
         } else {
             return executeInternalTransfer(request, fromAccount, targetIban, currency, valueDate, email);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Przelew SWIFT – kanał międzynarodowy przez symulator SWIFT
+    // -----------------------------------------------------------------------
+
+    private TransferResponse executeSwiftTransfer(
+            TransferRequest request,
+            Account fromAccount,
+            String currency,
+            LocalDate valueDate,
+            String email
+    ) {
+        validateSwiftTransfer(fromAccount, request);
+
+        // Waluta docelowa SWIFT (może różnić się od EUR)
+        String targetCurrency = (request.swiftTargetCurrency() != null && !request.swiftTargetCurrency().isBlank())
+                ? request.swiftTargetCurrency().trim().toUpperCase()
+                : currency;  // domyślnie waluta rachunku
+
+        // Przeliczenie kwoty EUR → waluta docelowa
+        BigDecimal swiftAmount = fxService.convert(request.amount(), currency, targetCurrency);
+        BigDecimal fxRate = fxService.getRate(currency, targetCurrency);
+
+        // Obliczenie opłaty SWIFT (1% od kwoty EUR, wg konfiguracji)
+        String chargeBearer = (request.chargeBearer() != null && !request.chargeBearer().isBlank())
+                ? request.chargeBearer().trim().toUpperCase() : "SHAR";
+        BigDecimal fee = BigDecimal.ZERO;
+        if ("DEBT".equals(chargeBearer) || "SHAR".equals(chargeBearer)) {
+            fee = request.amount()
+                    .multiply(BigDecimal.valueOf(swiftProperties.feePercent()))
+                    .setScale(4, RoundingMode.HALF_UP);
+        }
+
+        // Sprawdzenie salda: kwota + opłata
+        BigDecimal totalDebit = request.amount().add(fee);
+        if (fromAccount.getBalance().getAmount().compareTo(totalDebit) < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Niewystarczające środki. Potrzeba " + totalDebit + " EUR (kwota " +
+                    request.amount() + " + opłata SWIFT " + fee + " EUR)");
+        }
+
+        // Budowanie pacs.008
+        String uetr  = UUID.randomUUID().toString();
+        String msgId = "MSG-" + UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase();
+        String debtorIban = fromAccount.getAccountNumber().getValue();
+        String pacs008 = Pacs008Builder.build(
+                msgId, uetr, UUID.randomUUID().toString(),
+                swiftAmount, targetCurrency,
+                fromAccount.getCustomer().getFirstName() + " " + fromAccount.getCustomer().getLastName(),
+                debtorIban,
+                swiftProperties.bankBic(),
+                request.beneficiaryName() != null ? request.beneficiaryName() : "Beneficiary",
+                request.toIban(),
+                request.toBic(),
+                chargeBearer,
+                request.description(),
+                valueDate
+        );
+
+        // Wysyłka do symulatora SWIFT
+        SwiftClient.SwiftPaymentResponse swiftResp = swiftClient.sendMessage(pacs008);
+
+        // Obciążenie konta klienta (kwota + opłata)
+        fromAccount.setBalance(fromAccount.getBalance().subtract(Money.of(totalDebit, currency)));
+        accountRepository.save(fromAccount);
+
+        // Obciążenie rachunku nostro (pierwszego korespondenta)
+        String route = swiftResp != null && swiftResp.route() != null
+                ? swiftResp.route().toString() : "[\"" + swiftProperties.bankBic() + "\",\"" + request.toBic() + "\"]"; 
+        if (swiftResp != null && swiftResp.route() != null && swiftResp.route().size() > 1) {
+            String firstCorrespondentBic = swiftResp.route().get(1);
+            correspondentAccountRepository
+                    .findByCorrespondentBicAndCurrencyAndStatus(firstCorrespondentBic, targetCurrency, "ACTIVE")
+                    .ifPresent(nostro -> {
+                        nostro.setBalance(nostro.getBalance().subtract(swiftAmount));
+                        correspondentAccountRepository.save(nostro);
+                        log.info("SWIFT nostro: obciążono konto {} ({}) kwotą {} {}",
+                                nostro.getAccountNumber(), firstCorrespondentBic, swiftAmount, targetCurrency);
+                    });
+        }
+
+        // Zapis transakcji DEBIT
+        String swiftDesc = "SWIFT " + chargeBearer + " → " + request.toBic() +
+                (request.description() != null ? " | " + request.description() : "");
+        transactionRepository.save(Transaction.builder()
+                .account(fromAccount)
+                .amount(Money.of(totalDebit, currency))
+                .type(TransactionType.DEBIT)
+                .status(TransactionStatus.COMPLETED)
+                .description(swiftDesc)
+                .referenceId(uetr)
+                .counterpartyName(request.beneficiaryName())
+                .counterpartyIban(request.toIban())
+                .build());
+
+        // Budowanie encji Transfer
+        boolean accepted = swiftResp == null || !
+                "REJECTED".equalsIgnoreCase(swiftResp.status());
+        Transfer transfer = Transfer.builder()
+                .fromAccount(fromAccount)
+                .toAccount(null)
+                .toIban(request.toIban())
+                .toBic(request.toBic())
+                .beneficiaryName(request.beneficiaryName())
+                .amount(Money.of(request.amount(), currency))
+                .channel(TransferChannel.SWIFT)
+                .status(accepted ? TransferStatus.COMPLETED : TransferStatus.FAILED)
+                .description(request.description())
+                .valueDate(valueDate)
+                .requiresApproval(false)
+                .swiftMsgId(msgId)
+                .swiftUetr(uetr)
+                .swiftChargeBearer(chargeBearer)
+                .swiftRoute(route)
+                .swiftFee(fee)
+                .swiftFxRate(fxRate)
+                .swiftTargetCurrency(targetCurrency)
+                .swiftRecalled(false)
+                .completedAt(accepted ? LocalDateTime.now() : null)
+                .build();
+
+        transfer = transferRepository.save(transfer);
+        log.info("SWIFT transfer {} zapisany: status={}, route={}, fee={} EUR, fxRate={}",
+                transfer.getId(), transfer.getStatus(), route, fee, fxRate);
+        return mapToResponse(transfer);
+    }
+
+    private void validateSwiftTransfer(Account fromAccount, TransferRequest request) {
+        if (fromAccount.getStatus() != AccountStatus.ACTIVE) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Rachunek musi być aktywny");
+        }
+        if (request.toBic() == null || request.toBic().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Przelew SWIFT wymaga podania BIC banku odbiorcy (SWIFT BIC)");
+        }
+        if (request.toIban() == null || request.toIban().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Przelew SWIFT wymaga podania numeru rachunku odbiorcy");
+        }
+        if (request.beneficiaryName() == null || request.beneficiaryName().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Przelew SWIFT wymaga podania nazwy odbiorcy");
+        }
+        if (!swiftClient.isEnabled()) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "System SWIFT jest chwilowo niedostępny");
+        }
+        String targetCcy = request.swiftTargetCurrency();
+        if (targetCcy != null && !targetCcy.isBlank() && !SWIFT_CURRENCIES.contains(targetCcy.toUpperCase())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Nieobsługiwana waluta SWIFT: " + targetCcy + ". Dostępne: EUR, USD, GBP, PLN, CHF");
         }
     }
 
@@ -324,6 +503,7 @@ public class TransferService {
                 || transfer.getChannel() == TransferChannel.SEPA_INSTANT
                 || transfer.getChannel() == TransferChannel.TARGET;
 
+        // SWIFT nie przechodzi przez approve flow (requiresApproval=false)
         if (isExternal) {
             processExternalTransfer(transfer);
         } else {
@@ -512,7 +692,15 @@ public class TransferService {
                 transfer.getValueDate(),
                 transfer.isRequiresApproval(),
                 transfer.getCreatedAt(),
-                transfer.getCompletedAt()
+                transfer.getCompletedAt(),
+                // Pola SWIFT
+                transfer.getSwiftMsgId(),
+                transfer.getSwiftUetr(),
+                transfer.getSwiftRoute(),
+                transfer.getSwiftFee(),
+                transfer.getSwiftFxRate(),
+                transfer.getSwiftTargetCurrency(),
+                transfer.getSwiftChargeBearer()
         );
     }
 

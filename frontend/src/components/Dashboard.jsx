@@ -7,7 +7,7 @@ import JuniorPanel from './JuniorPanel'
 import CardsPanel from './CardsPanel'
 import { getMyAccounts, getPendingApprovals } from '../services/account'
 
-const TRANSFER_NAV_IDS = ['sepa', 'instant', 'target', 'internal', 'transfers']
+const TRANSFER_NAV_IDS = ['sepa', 'instant', 'target', 'internal', 'swift', 'transfers']
 
 export default function Dashboard({ userEmail, onLogout }) {
     const [activeNav, setActiveNav] = useState('dashboard')

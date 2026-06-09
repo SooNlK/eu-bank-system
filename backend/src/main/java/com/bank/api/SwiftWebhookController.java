@@ -1,0 +1,78 @@
+package com.bank.api;
+
+import com.bank.service.SwiftIncomingService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+/**
+ * Endpoint przyjmowania przychodzących wiadomości SWIFT od symulatora.
+ *
+ * Symulator SWIFT (Jkwasnyy) wysyła pacs.008 XML na EU_BANK_URL = http://backend:8080/receive
+ * Endpoint jest publiczny (bez JWT) – symulator nie wysyła tokenów JWT.
+ */
+@RestController
+public class SwiftWebhookController {
+
+    private static final Logger log = LoggerFactory.getLogger(SwiftWebhookController.class);
+
+    private final SwiftIncomingService swiftIncomingService;
+
+    public SwiftWebhookController(SwiftIncomingService swiftIncomingService) {
+        this.swiftIncomingService = swiftIncomingService;
+    }
+
+    /**
+     * Główny endpoint odbioru przelewów SWIFT.
+     * Symulator wywołuje: POST EU_BANK_URL (domyślnie /receive)
+     */
+    @PostMapping(
+            value = "/receive",
+            consumes = {MediaType.APPLICATION_XML_VALUE, MediaType.TEXT_XML_VALUE, "application/xml;charset=UTF-8", "*/*"},
+            produces = MediaType.APPLICATION_JSON_VALUE
+    )
+    public ResponseEntity<String> receiveSwiftMessage(@RequestBody String pacs008Xml) {
+        log.info("SWIFT /receive – odebrano wiadomość pacs.008 ({} znaków)", pacs008Xml.length());
+
+        try {
+            String result = swiftIncomingService.processIncoming(pacs008Xml);
+            if ("ACCEPTED".equals(result)) {
+                return ResponseEntity.ok("{\"status\":\"ACCEPTED\"}");
+            } else {
+                // Konto nieistnieje – Recall wysłany
+                return ResponseEntity.ok("{\"status\":\"REJECTED\",\"reason\":\"Account not found or inactive\"}");
+            }
+        } catch (IllegalArgumentException e) {
+            log.warn("SWIFT /receive – błąd parsowania XML: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body("{\"status\":\"ERROR\",\"reason\":\"" + e.getMessage() + "\"}");
+        } catch (Exception e) {
+            log.error("SWIFT /receive – błąd wewnętrzny: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("{\"status\":\"ERROR\",\"reason\":\"Internal error\"}");
+        }
+    }
+
+    /**
+     * Dodatkowy alias na /api/v1/swift/receive – dla przejrzystości API.
+     */
+    @PostMapping(
+            value = "/api/v1/swift/receive",
+            consumes = {MediaType.APPLICATION_XML_VALUE, MediaType.TEXT_XML_VALUE, "*/*"},
+            produces = MediaType.APPLICATION_JSON_VALUE
+    )
+    public ResponseEntity<String> receiveSwiftMessageV1(@RequestBody String pacs008Xml) {
+        return receiveSwiftMessage(pacs008Xml);
+    }
+
+    /**
+     * Health check – symulator może sprawdzić dostępność banku.
+     */
+    @GetMapping("/receive")
+    public ResponseEntity<String> healthCheck() {
+        return ResponseEntity.ok("{\"status\":\"UP\",\"bank\":\"BANKDEXX\"}");
+    }
+}
