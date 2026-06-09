@@ -1,6 +1,7 @@
 package com.bank.domain.transaction;
 
 import com.bank.domain.account.Account;
+import com.bank.domain.card.Card;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -28,6 +29,10 @@ public class Transaction {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "account_id", nullable = false)
     private Account account;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "card_id")
+    private Card card;
 
     @Embedded
     @AttributeOverrides({

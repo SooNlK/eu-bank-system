@@ -160,6 +160,50 @@ class CardIssuerServiceTest {
                 .isEqualTo(TransactionStatus.COMPLETED);
     }
 
+    @Test
+    void shouldFailDirectCaptureWhenDailyLimitIsExceeded() {
+        Customer customer = createCustomer("card-limit-fail@example.test");
+        Account account = createAccount(customer, new BigDecimal("2000.00"));
+        String cardToken = "token-limit-fail-test";
+
+        cardRepository.save(com.bank.domain.card.Card.builder()
+                .account(account)
+                .externalCardToken(cardToken)
+                .maskedPan("4100 01** **** 1296")
+                .last4("1296")
+                .type(com.bank.domain.card.CardType.VIRTUAL)
+                .status(com.bank.domain.card.CardStatus.ACTIVE)
+                .expiresAt(java.time.LocalDate.now().plusYears(3))
+                .dailyLimit(Money.of(new BigDecimal("500.00"), "EUR"))
+                .monthlyLimit(Money.of(new BigDecimal("5000.00"), "EUR"))
+                .build());
+
+        UUID networkTransactionId1 = UUID.randomUUID();
+        cardIssuerService.capture(new IssuerCaptureRequest(
+                "AUTH-LIMIT-1",
+                networkTransactionId1,
+                new BigDecimal("400.00"),
+                "EUR",
+                "MERCH-POS-1",
+                cardToken
+        ));
+
+        UUID networkTransactionId2 = UUID.randomUUID();
+        org.junit.jupiter.api.Assertions.assertThrows(org.springframework.web.server.ResponseStatusException.class, () -> {
+            cardIssuerService.capture(new IssuerCaptureRequest(
+                    "AUTH-LIMIT-2",
+                    networkTransactionId2,
+                    new BigDecimal("200.00"),
+                    "EUR",
+                    "MERCH-POS-1",
+                    cardToken
+            ));
+        });
+
+        Account finalAccount = accountRepository.findById(account.getId()).orElseThrow();
+        assertThat(finalAccount.getBalance().getAmount()).isEqualByComparingTo("1600.00");
+    }
+
     private Customer createCustomer(String email) {
         return customerRepository.save(Customer.builder()
                 .firstName("Card")

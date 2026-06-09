@@ -21,6 +21,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Service
@@ -154,6 +156,28 @@ public class CardIssuerService {
                 convertedAmountVal = fxService.convert(request.amount(), currency, accountCurrency);
             }
 
+            // Enforce daily limit
+            if (card.getDailyLimit() != null) {
+                LocalDateTime startOfToday = LocalDate.now().atStartOfDay();
+                BigDecimal dailySpent = transactionRepository.sumAmountByCardIdAndTypeAndStatusAndCreatedAtAfter(
+                        card.getId(), startOfToday);
+                BigDecimal newDailySpent = dailySpent.add(convertedAmountVal);
+                if (newDailySpent.compareTo(card.getDailyLimit().getAmount()) > 0) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Przekroczono dzienny limit transakcji na karcie.");
+                }
+            }
+
+            // Enforce monthly limit
+            if (card.getMonthlyLimit() != null) {
+                LocalDateTime startOfMonth = LocalDate.now().withDayOfMonth(1).atStartOfDay();
+                BigDecimal monthlySpent = transactionRepository.sumAmountByCardIdAndTypeAndStatusAndCreatedAtAfter(
+                        card.getId(), startOfMonth);
+                BigDecimal newMonthlySpent = monthlySpent.add(convertedAmountVal);
+                if (newMonthlySpent.compareTo(card.getMonthlyLimit().getAmount()) > 0) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Przekroczono miesięczny limit transakcji na karcie.");
+                }
+            }
+
             Money amount = Money.of(convertedAmountVal, accountCurrency);
             BigDecimal available = account.getBalance().getAmount().subtract(account.getReservedBalance().getAmount());
             if (available.compareTo(convertedAmountVal) < 0) {
@@ -170,6 +194,7 @@ public class CardIssuerService {
 
             transactionRepository.save(Transaction.builder()
                     .account(account)
+                    .card(card)
                     .amount(amount)
                     .type(TransactionType.DEBIT)
                     .status(TransactionStatus.COMPLETED)
