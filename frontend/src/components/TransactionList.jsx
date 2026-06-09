@@ -21,7 +21,8 @@ export default function TransactionList({ transactions = [], loading, onSelect }
     const mappedTransactions = transactions.map(tx => {
         const isExpense = tx.type === 'DEBIT';
         const isPending = tx.status === 'PENDING_APPROVAL';
-        const isRejected = tx.status === 'REJECTED';
+        const isFailed = tx.status === 'FAILED';
+        const isRejected = tx.status === 'REJECTED' || isFailed;
         
         const rawAmount = tx.amount?.amount ?? tx.amount ?? 0;
         const currency = tx.amount?.currency ?? tx.currency ?? 'EUR';
@@ -57,7 +58,7 @@ export default function TransactionList({ transactions = [], loading, onSelect }
             icon,
             name: tx.description || tx.type,
             badge: {
-                label: isPending ? 'Czeka na zgodę 🧸' : isRejected ? 'Odrzucony ❌' : tx.type,
+                label: isPending ? 'Czeka na zgodę 🧸' : isFailed ? 'Nieudana ❌' : isRejected ? 'Odrzucony ❌' : tx.type,
                 className: isPending 
                     ? 'bg-amber-50 text-amber-700 border border-amber-200/50' 
                     : isRejected

@@ -35,15 +35,18 @@ public class CardIssuerService {
     private final TransactionRepository transactionRepository;
     private final CardRepository cardRepository;
     private final FxService fxService;
+    private final TransactionService transactionService;
 
     public CardIssuerService(AccountRepository accountRepository,
                              TransactionRepository transactionRepository,
                              CardRepository cardRepository,
-                             FxService fxService) {
+                             FxService fxService,
+                             TransactionService transactionService) {
         this.accountRepository = accountRepository;
         this.transactionRepository = transactionRepository;
         this.cardRepository = cardRepository;
         this.fxService = fxService;
+        this.transactionService = transactionService;
     }
 
     @Transactional
@@ -156,6 +159,8 @@ public class CardIssuerService {
                 convertedAmountVal = fxService.convert(request.amount(), currency, accountCurrency);
             }
 
+            Money amount = Money.of(convertedAmountVal, accountCurrency);
+
             // Enforce daily limit
             if (card.getDailyLimit() != null) {
                 LocalDateTime startOfToday = LocalDate.now().atStartOfDay();
@@ -163,6 +168,7 @@ public class CardIssuerService {
                         card.getId(), startOfToday);
                 BigDecimal newDailySpent = dailySpent.add(convertedAmountVal);
                 if (newDailySpent.compareTo(card.getDailyLimit().getAmount()) > 0) {
+                    transactionService.saveFailedTransaction(account.getId(), card.getId(), amount, "Rozliczenie płatności kartą (POS) - ODRZUCONA (Przekroczono limit dzienny)", request.merchantId(), request.authorizationCode(), request.amount(), currency);
                     throw new ResponseStatusException(HttpStatus.CONFLICT, "Przekroczono dzienny limit transakcji na karcie.");
                 }
             }
@@ -174,13 +180,14 @@ public class CardIssuerService {
                         card.getId(), startOfMonth);
                 BigDecimal newMonthlySpent = monthlySpent.add(convertedAmountVal);
                 if (newMonthlySpent.compareTo(card.getMonthlyLimit().getAmount()) > 0) {
+                    transactionService.saveFailedTransaction(account.getId(), card.getId(), amount, "Rozliczenie płatności kartą (POS) - ODRZUCONA (Przekroczono limit miesięczny)", request.merchantId(), request.authorizationCode(), request.amount(), currency);
                     throw new ResponseStatusException(HttpStatus.CONFLICT, "Przekroczono miesięczny limit transakcji na karcie.");
                 }
             }
 
-            Money amount = Money.of(convertedAmountVal, accountCurrency);
             BigDecimal available = account.getBalance().getAmount().subtract(account.getReservedBalance().getAmount());
             if (available.compareTo(convertedAmountVal) < 0) {
+                transactionService.saveFailedTransaction(account.getId(), card.getId(), amount, "Rozliczenie płatności kartą (POS) - ODRZUCONA (Brak środków)", request.merchantId(), request.authorizationCode(), request.amount(), currency);
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Brak wystarczających środków na rachunku.");
             }
 
