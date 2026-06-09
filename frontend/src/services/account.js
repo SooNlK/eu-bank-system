@@ -259,3 +259,14 @@ export async function updateCardLimits(cardId, dailyLimit, monthlyLimit) {
     return response.json()
 }
 
+export async function fetchSensitiveCardDetails(cardId) {
+    const response = await fetch(`/api/cards/${cardId}/sensitive`, {
+        method: "GET",
+        headers: getHeaders(),
+    })
+    if (!response.ok) {
+        throw new Error(await readError(response))
+    }
+    return response.json()
+}
+

@@ -16,7 +16,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1")
 @Tag(name = "Card Issuer API", description = "Endpointy wywoływane przez zewnętrzną sieć kartową")
 public class CardIssuerController {
 
@@ -26,21 +25,21 @@ public class CardIssuerController {
         this.cardIssuerService = cardIssuerService;
     }
 
-    @PostMapping("/authorize")
+    @PostMapping({"/api/v1/authorize", "/authorize"})
     @Operation(summary = "Autoryzacja płatności kartą",
             description = "Sprawdza status rachunku, walutę i dostępne środki, a następnie rezerwuje kwotę transakcji.")
     public ResponseEntity<IssuerAuthorizationResponse> authorize(@Valid @RequestBody IssuerAuthorizationRequest request) {
         return ResponseEntity.ok(cardIssuerService.authorize(request));
     }
 
-    @PostMapping("/capture")
+    @PostMapping({"/api/v1/capture", "/capture"})
     @Operation(summary = "Rozliczenie autoryzowanej płatności kartą",
             description = "Zdejmuje rezerwację i księguje finalny debet na rachunku klienta.")
     public ResponseEntity<IssuerStatusResponse> capture(@Valid @RequestBody IssuerCaptureRequest request) {
         return ResponseEntity.ok(cardIssuerService.capture(request));
     }
 
-    @PostMapping("/refund")
+    @PostMapping({"/api/v1/refund", "/refund"})
     @Operation(summary = "Zwrot płatności kartą",
             description = "Księguje uznanie rachunku klienta po zwrocie z sieci kartowej.")
     public ResponseEntity<IssuerStatusResponse> refund(@Valid @RequestBody IssuerRefundRequest request) {

@@ -68,10 +68,18 @@ public class CardNetworkClient {
     }
 
     public CardNetworkStatusResponse activateCard(String cardToken, String activatedBy) {
+        Map<String, Object> body = new TreeMap<>();
+        body.put("activated_by", activatedBy);
+
+        SignedBody signedBody = sign(body);
+
         return restClient.post()
                 .uri("/api/v1/cards/{token}/activate", cardToken)
                 .contentType(MediaType.APPLICATION_JSON)
-                .body(Map.of("activated_by", activatedBy))
+                .header("X-API-Key", apiKey)
+                .header("X-Signature", signedBody.signature())
+                .header("X-Timestamp", signedBody.timestamp())
+                .body(signedBody.jsonBody())
                 .retrieve()
                 .body(CardNetworkStatusResponse.class);
     }
@@ -83,12 +91,28 @@ public class CardNetworkClient {
                 .body(CardNetworkCardResponse.class);
     }
 
+    public CardNetworkFullPanResponse getFullPan(String cardToken) {
+        return restClient.get()
+                .uri("/api/v1/cards/{token}/full-pan", cardToken)
+                .header("X-Admin-Key", "admin-secret-key-2026")
+                .retrieve()
+                .body(CardNetworkFullPanResponse.class);
+    }
+
     private CardNetworkStatusResponse updateStatus(String cardToken, String status, String reason) {
+        Map<String, Object> body = new TreeMap<>();
+        body.put("status", status);
+        body.put("reason", reason);
+
+        SignedBody signedBody = sign(body);
+
         return restClient.patch()
                 .uri("/api/v1/cards/{token}/status", cardToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .header("X-API-Key", apiKey)
-                .body(Map.of("status", status, "reason", reason))
+                .header("X-Signature", signedBody.signature())
+                .header("X-Timestamp", signedBody.timestamp())
+                .body(signedBody.jsonBody())
                 .retrieve()
                 .body(CardNetworkStatusResponse.class);
     }

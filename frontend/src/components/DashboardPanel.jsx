@@ -74,11 +74,11 @@ export default function DashboardPanel({ onNewTransfer, isJunior }) {
     })
 
     const income = monthlyTransactions
-        .filter(t => t.type === 'CREDIT')
+        .filter(t => t.type === 'CREDIT' && t.status === 'COMPLETED')
         .reduce((sum, t) => sum + (t.amount?.amount ?? t.amount ?? 0), 0)
 
     const expenses = monthlyTransactions
-        .filter(t => t.type === 'DEBIT')
+        .filter(t => t.type === 'DEBIT' && t.status === 'COMPLETED')
         .reduce((sum, t) => sum + (t.amount?.amount ?? t.amount ?? 0), 0)
 
     const monthName = now.toLocaleString('pl-PL', { month: 'long' })

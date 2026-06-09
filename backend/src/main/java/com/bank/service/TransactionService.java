@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import org.springframework.transaction.annotation.Propagation;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -24,15 +25,21 @@ public class TransactionService {
     private final TransactionRepository transactionRepository;
     private final AccountService accountService;
     private final TransferRepository transferRepository;
+    private final com.bank.repository.AccountRepository accountRepository;
+    private final com.bank.repository.CardRepository cardRepository;
 
     public TransactionService(
             TransactionRepository transactionRepository,
             AccountService accountService,
-            TransferRepository transferRepository
+            TransferRepository transferRepository,
+            com.bank.repository.AccountRepository accountRepository,
+            com.bank.repository.CardRepository cardRepository
     ) {
         this.transactionRepository = transactionRepository;
         this.accountService = accountService;
         this.transferRepository = transferRepository;
+        this.accountRepository = accountRepository;
+        this.cardRepository = cardRepository;
     }
 
     public List<TransactionResponse> getTransactionsForAccount(UUID accountId, String email) {
@@ -105,5 +112,39 @@ public class TransactionService {
                 counterpartyName,
                 counterpartyIban
         );
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void saveFailedTransaction(
+            UUID accountId,
+            UUID cardId,
+            com.bank.domain.shared.Money amount,
+            String descriptionPrefix,
+            String merchantId,
+            String authCode,
+            java.math.BigDecimal origAmount,
+            String origCurrency
+    ) {
+        com.bank.domain.account.Account account = accountRepository.findById(accountId).orElse(null);
+        com.bank.domain.card.Card card = cardId != null ? cardRepository.findById(cardId).orElse(null) : null;
+        if (account == null) return;
+
+        String txDesc = descriptionPrefix;
+        if (origCurrency != null && !account.getBalance().getCurrency().equals(origCurrency)) {
+            txDesc += " (" + origAmount + " " + origCurrency + ")";
+        }
+        if (merchantId != null && !merchantId.isBlank()) {
+            txDesc += " - " + merchantId.trim();
+        }
+
+        transactionRepository.save(Transaction.builder()
+                .account(account)
+                .card(card)
+                .amount(amount)
+                .type(TransactionType.DEBIT)
+                .status(com.bank.domain.transaction.TransactionStatus.FAILED)
+                .description(txDesc)
+                .referenceId("CARD_AUTH:" + authCode)
+                .build());
     }
 }

@@ -55,6 +55,9 @@ public class SecurityConfig {
                                 "/api/v1/authorize",
                                 "/api/v1/capture",
                                 "/api/v1/refund",
+                                "/authorize",
+                                "/capture",
+                                "/refund",
                                 "/api/v1/target-settlement",
                                 // Endpoint SWIFT – symulator nie wysyła JWT
                                 "/receive",
