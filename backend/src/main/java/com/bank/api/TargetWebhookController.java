@@ -4,6 +4,8 @@ import com.bank.config.EuPaymentsProperties;
 import com.bank.service.TransferService;
 import com.bank.client.eupayments.SepaInstantClient;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -23,6 +25,7 @@ import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/v1")
+@Tag(name = "TARGET/SEPA Webhook", description = "Odbiór powiadomień rozliczeniowych z symulatora płatności (bez autoryzacji JWT)")
 public class TargetWebhookController {
 
     private static final Logger log = LoggerFactory.getLogger(TargetWebhookController.class);
@@ -42,6 +45,8 @@ public class TargetWebhookController {
     }
 
     @PostMapping("/target-settlement")
+    @Operation(summary = "Obsługa webhooka rozliczeniowego TARGET/SEPA", 
+            description = "Odbiera i przetwarza komunikaty rozliczeniowe z zewnętrznego symulatora płatności (TARGET, SEPA Core, SEPA Instant).")
     public ResponseEntity<String> handleTargetWebhook(@RequestBody WebhookPayload payload) {
         log.info("Received TARGET webhook event: {} for transfer {}", payload.event(), payload.transferId());
 

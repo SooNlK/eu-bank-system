@@ -1,6 +1,8 @@
 package com.bank.api;
 
 import com.bank.service.SwiftIncomingService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -15,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
  * Endpoint jest publiczny (bez JWT) – symulator nie wysyła tokenów JWT.
  */
 @RestController
+@Tag(name = "SWIFT Webhook", description = "Odbiór przychodzących przelewów SWIFT z symulatora (bez autoryzacji JWT)")
 public class SwiftWebhookController {
 
     private static final Logger log = LoggerFactory.getLogger(SwiftWebhookController.class);
@@ -34,6 +37,8 @@ public class SwiftWebhookController {
             consumes = {MediaType.APPLICATION_XML_VALUE, MediaType.TEXT_XML_VALUE, "application/xml;charset=UTF-8", "*/*"},
             produces = MediaType.APPLICATION_JSON_VALUE
     )
+    @Operation(summary = "Odbiór wiadomości pacs.008", 
+            description = "Główny endpoint webhooka dla symulatora SWIFT. Przyjmuje i rozlicza pacs.008 XML.")
     public ResponseEntity<String> receiveSwiftMessage(@RequestBody String pacs008Xml) {
         log.info("SWIFT /receive – odebrano wiadomość pacs.008 ({} znaków)", pacs008Xml.length());
 
@@ -64,6 +69,8 @@ public class SwiftWebhookController {
             consumes = {MediaType.APPLICATION_XML_VALUE, MediaType.TEXT_XML_VALUE, "*/*"},
             produces = MediaType.APPLICATION_JSON_VALUE
     )
+    @Operation(summary = "Alias odbioru wiadomości pacs.008", 
+            description = "Dodatkowy endpoint /api/v1/swift/receive do odbierania wiadomości SWIFT.")
     public ResponseEntity<String> receiveSwiftMessageV1(@RequestBody String pacs008Xml) {
         return receiveSwiftMessage(pacs008Xml);
     }
@@ -72,6 +79,8 @@ public class SwiftWebhookController {
      * Health check – symulator może sprawdzić dostępność banku.
      */
     @GetMapping("/receive")
+    @Operation(summary = "Health check SWIFT", 
+            description = "Sprawdza status integracji SWIFT dla symulatora.")
     public ResponseEntity<String> healthCheck() {
         return ResponseEntity.ok("{\"status\":\"UP\",\"bank\":\"BANKDEXX\"}");
     }

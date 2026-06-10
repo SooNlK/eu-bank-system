@@ -24,7 +24,6 @@ public class OpenApiConfig {
                         .contact(new Contact()
                                 .name("EU Bank Team")
                                 .email("api@eu-bank.eu")))
-                .addSecurityItem(new SecurityRequirement().addList(SECURITY_SCHEME_NAME))
                 .components(new Components()
                         .addSecuritySchemes(SECURITY_SCHEME_NAME, new SecurityScheme()
                                 .name(SECURITY_SCHEME_NAME)
