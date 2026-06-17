@@ -105,6 +105,46 @@ public class SwiftClient {
         }
     }
 
+    /**
+     * Wysyła komunikat zwrotny (Recall) do symulatora SWIFT.
+     */
+    public boolean sendReturn(String recallXml) {
+        if (!props.enabled()) {
+            log.warn("SWIFT jest wyłączony w konfiguracji (app.swift.enabled=false)");
+            return false;
+        }
+
+        String token = getToken();
+        if (token == null) {
+            log.error("Nie udało się pobrać tokenu SWIFT");
+            return false;
+        }
+
+        String url = props.url() + "/api/bank/return";
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Bearer " + token);
+        headers.setContentType(MediaType.APPLICATION_XML);
+        headers.set("X-SWIFT-Message-Type", "RETURN");
+
+        HttpEntity<String> request = new HttpEntity<>(recallXml, headers);
+
+        try {
+            ResponseEntity<String> response = restTemplate.exchange(
+                    url, HttpMethod.POST, request, String.class);
+
+            if (response.getStatusCode().is2xxSuccessful()) {
+                log.info("SWIFT /api/bank/return → HTTP {}", response.getStatusCode());
+                return true;
+            } else {
+                log.warn("SWIFT /api/bank/return → HTTP {}: {}", response.getStatusCode(), response.getBody());
+                return false;
+            }
+        } catch (Exception e) {
+            log.error("Błąd wysyłania zwrotu SWIFT: {}", e.getMessage(), e);
+            return false;
+        }
+    }
+
     // ===== Token management =====
 
     private synchronized String getToken() {
@@ -123,6 +163,7 @@ public class SwiftClient {
         body.add("grant_type",    "client_credentials");
         body.add("client_id",     props.clientId());
         body.add("client_secret", props.clientSecret());
+        body.add("bank_bic",      props.bankBic());
 
         HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
 

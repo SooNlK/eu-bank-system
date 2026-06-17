@@ -48,8 +48,8 @@ app:
     webhook-url: ${WEBHOOK_URL:}
   swift:
     url: ${SWIFT_URL:http://localhost:3000}
-    client-id: ${SWIFT_CLIENT_ID:test-client}
-    client-secret: ${SWIFT_CLIENT_SECRET:test-secret}
+    client-id: ${SWIFT_CLIENT_ID:bank-bankdexx}
+    client-secret: ${SWIFT_CLIENT_SECRET:secret-bankdexx}
     bank-bic: ${SWIFT_BANK_BIC:BANKDEXX}
     enabled: ${SWIFT_ENABLED:true}
     fee-percent: ${SWIFT_FEE_PERCENT:0.01}

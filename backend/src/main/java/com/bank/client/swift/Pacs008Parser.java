@@ -65,7 +65,9 @@ public final class Pacs008Parser {
 
             // Debtor (sender)
             String senderName = text(doc, "Dbtr", "Nm");
-            String senderIban = firstNonEmpty(text(doc, "DbtrAcct", "IBAN"), text(doc, "IBAN"));
+            String senderIban = firstNonEmpty(text(doc, "DbtrAcct", "IBAN"),
+                                              text(doc, "DbtrAcct", "Id"),
+                                              text(doc, "IBAN"));
             String senderBic  = firstNonEmpty(text(doc, "DbtrAgt", "BICFI"), text(doc, "BICFI"));
 
             // Creditor (receiver)

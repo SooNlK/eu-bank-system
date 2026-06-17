@@ -18,6 +18,8 @@ public interface TransferRepository extends JpaRepository<Transfer, UUID> {
 
     List<Transfer> findByChannelAndStatus(TransferChannel channel, TransferStatus status);
 
+    Optional<Transfer> findBySwiftUetr(String swiftUetr);
+
     @Query("""
             select t from Transfer t
             where t.fromAccount.customer.email = :email

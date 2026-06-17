@@ -39,11 +39,15 @@ public class SwiftWebhookController {
     )
     @Operation(summary = "Odbiór wiadomości pacs.008", 
             description = "Główny endpoint webhooka dla symulatora SWIFT. Przyjmuje i rozlicza pacs.008 XML.")
-    public ResponseEntity<String> receiveSwiftMessage(@RequestBody String pacs008Xml) {
-        log.info("SWIFT /receive – odebrano wiadomość pacs.008 ({} znaków)", pacs008Xml.length());
+    public ResponseEntity<String> receiveSwiftMessage(
+            @RequestBody String pacs008Xml,
+            @RequestHeader(value = "X-SWIFT-Message-Type", required = false) String messageType
+    ) {
+        log.info("SWIFT /receive – odebrano wiadomość pacs.008 ({} znaków), typ={}", pacs008Xml.length(), messageType);
 
         try {
-            String result = swiftIncomingService.processIncoming(pacs008Xml);
+            boolean isReturn = "RETURN".equalsIgnoreCase(messageType);
+            String result = swiftIncomingService.processIncoming(pacs008Xml, isReturn);
             if ("ACCEPTED".equals(result)) {
                 return ResponseEntity.ok("{\"status\":\"ACCEPTED\"}");
             } else {
@@ -71,8 +75,11 @@ public class SwiftWebhookController {
     )
     @Operation(summary = "Alias odbioru wiadomości pacs.008", 
             description = "Dodatkowy endpoint /api/v1/swift/receive do odbierania wiadomości SWIFT.")
-    public ResponseEntity<String> receiveSwiftMessageV1(@RequestBody String pacs008Xml) {
-        return receiveSwiftMessage(pacs008Xml);
+    public ResponseEntity<String> receiveSwiftMessageV1(
+            @RequestBody String pacs008Xml,
+            @RequestHeader(value = "X-SWIFT-Message-Type", required = false) String messageType
+    ) {
+        return receiveSwiftMessage(pacs008Xml, messageType);
     }
 
     /**
