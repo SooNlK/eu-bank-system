@@ -41,9 +41,16 @@ public class SwiftWebhookController {
             description = "Główny endpoint webhooka dla symulatora SWIFT. Przyjmuje i rozlicza pacs.008 XML.")
     public ResponseEntity<String> receiveSwiftMessage(
             @RequestBody String pacs008Xml,
-            @RequestHeader(value = "X-SWIFT-Message-Type", required = false) String messageType
+            @RequestHeader(value = "X-SWIFT-Message-Type", required = false) String messageType,
+            @RequestHeader(value = "X-SWIFT-Fee-For", required = false) String feeFor,
+            @RequestHeader(value = "X-SWIFT-Fee-Amount", required = false) String feeAmount
     ) {
-        log.info("SWIFT /receive – odebrano wiadomość pacs.008 ({} znaków), typ={}", pacs008Xml.length(), messageType);
+        log.info("SWIFT /receive – odebrano wiadomość pacs.008 ({} znaków), typ={}, feeFor={}", pacs008Xml.length(), messageType, feeFor);
+
+        if (feeFor != null && !feeFor.isBlank()) {
+            log.info("SWIFT /receive – odebrano powiadomienie o prowizji (Fee Notification) dla roli: {}, kwota: {}", feeFor, feeAmount);
+            return ResponseEntity.ok("{\"status\":\"ACCEPTED\"}");
+        }
 
         try {
             boolean isReturn = "RETURN".equalsIgnoreCase(messageType);
@@ -77,9 +84,11 @@ public class SwiftWebhookController {
             description = "Dodatkowy endpoint /api/v1/swift/receive do odbierania wiadomości SWIFT.")
     public ResponseEntity<String> receiveSwiftMessageV1(
             @RequestBody String pacs008Xml,
-            @RequestHeader(value = "X-SWIFT-Message-Type", required = false) String messageType
+            @RequestHeader(value = "X-SWIFT-Message-Type", required = false) String messageType,
+            @RequestHeader(value = "X-SWIFT-Fee-For", required = false) String feeFor,
+            @RequestHeader(value = "X-SWIFT-Fee-Amount", required = false) String feeAmount
     ) {
-        return receiveSwiftMessage(pacs008Xml, messageType);
+        return receiveSwiftMessage(pacs008Xml, messageType, feeFor, feeAmount);
     }
 
     /**

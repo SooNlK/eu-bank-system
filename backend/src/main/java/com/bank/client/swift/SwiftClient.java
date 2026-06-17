@@ -39,7 +39,8 @@ public class SwiftClient {
         factory.setConnectTimeout(5000);
         factory.setReadTimeout(10000);
         this.restTemplate = new RestTemplate(factory);
-        this.objectMapper = new ObjectMapper();
+        this.objectMapper = new ObjectMapper()
+                .configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     }
 
     // ===== Response DTOs =====

@@ -101,6 +101,8 @@ export async function createExternalTransfer({
     channel,
     valueDate,
     description,
+    chargeBearer,
+    swiftTargetCurrency,
 }) {
     const response = await fetch("/api/transfers", {
         method: "POST",
@@ -115,6 +117,8 @@ export async function createExternalTransfer({
             channel,
             valueDate: valueDate || null,
             description: description || null,
+            chargeBearer: chargeBearer || null,
+            swiftTargetCurrency: swiftTargetCurrency || null,
         }),
     })
 
