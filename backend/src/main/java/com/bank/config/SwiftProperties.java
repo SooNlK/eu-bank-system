@@ -3,7 +3,7 @@ package com.bank.config;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * Konfiguracja integracji z symulatorem sieci SWIFT (Jkwasnyy/SWIFT-Aplikacje-Biznesowe).
+ * Konfiguracja integracji z symulatorem sieci SWIFT.
  */
 @ConfigurationProperties(prefix = "app.swift")
 public record SwiftProperties(

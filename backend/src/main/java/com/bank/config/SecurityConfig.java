@@ -62,6 +62,7 @@ public class SecurityConfig {
                                 // Endpoint SWIFT – symulator nie wysyła JWT
                                 "/receive",
                                 "/api/v1/swift/receive",
+                                "/api/v1/klik/**",
                                 "/error"
                         ).permitAll()
                         .anyRequest().authenticated()

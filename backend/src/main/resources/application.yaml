@@ -53,6 +53,11 @@ app:
     bank-bic: ${SWIFT_BANK_BIC:BANKDEXX}
     enabled: ${SWIFT_ENABLED:true}
     fee-percent: ${SWIFT_FEE_PERCENT:0.01}
+  klik:
+    url: ${KLIK_URL:http://localhost:8000}
+    api-key: ${KLIK_API_KEY:klik_mock_api_key_for_c2b}
+    bank-api-key: ${KLIK_BANK_API_KEY:klik_mock_api_key_for_p2p}
+    zone: ${KLIK_ZONE:EU}
 
 springdoc:
   api-docs:
