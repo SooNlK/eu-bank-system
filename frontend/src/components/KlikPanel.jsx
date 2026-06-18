@@ -9,12 +9,25 @@ import {
     createKlikP2pTransfer
 } from '../services/klik'
 
+const inputClass =
+    'w-full text-[12px] border border-slate-200 rounded-[9px] px-3 py-2 text-slate-800 bg-slate-50 outline-none focus:border-blue-400'
+
+const labelClass = 'text-[11px] text-slate-500 font-medium mb-1.5 block'
+
+function formatEur(amount, currency = 'EUR') {
+    return new Intl.NumberFormat('pl-PL', {
+        style: 'currency',
+        currency,
+        minimumFractionDigits: 2,
+    }).format(amount)
+}
+
 export default function KlikPanel() {
     const [accounts, setAccounts] = useState([])
     const [selectedAccount, setSelectedAccount] = useState('')
     const [activeTab, setActiveTab] = useState('c2b')
     const [loading, setLoading] = useState(false)
-    const [toast, setToast] = useState(null)
+    const [message, setMessage] = useState(null)
 
     // C2B States
     const [klikCode, setKlikCode] = useState('')
@@ -43,15 +56,12 @@ export default function KlikPanel() {
             try {
                 const accs = await getMyAccounts()
                 setAccounts(accs)
-                if (accs.length > 0) {
-                    setSelectedAccount(accs[0].id)
-                }
+                if (accs.length > 0) setSelectedAccount(accs[0].id)
             } catch (err) {
-                showToast(err.message, 'error')
+                showMessage(err.message, 'error')
             }
         }
         loadAccounts()
-
         return () => {
             clearInterval(timerRef.current)
             clearInterval(pollRef.current)
@@ -64,42 +74,31 @@ export default function KlikPanel() {
 
     // Convert any phone number to E.164 format (+49XXXXXXXXXX for Germany/EU zone)
     function toE164(raw) {
-        // Remove all whitespace, hyphens and parentheses
         let num = raw.replace(/[\s\-()]/g, '')
-        // Already in E.164 format
         if (/^\+\d{7,15}$/.test(num)) return num
-        // Starts with 00 country code (e.g. 0049...)
         if (/^00\d{7,15}$/.test(num)) return '+' + num.slice(2)
-        // German local number starting with 0 (e.g. 030..., 0151...)
         if (/^0\d{5,14}$/.test(num)) return '+49' + num.slice(1)
-        // Number without any prefix - assume Germany +49
         if (/^\d{5,14}$/.test(num)) return '+49' + num
-        // Return as-is and let backend validate
         return num
     }
 
-    function showToast(message, type = 'success') {
-        setToast({ message, type })
-        setTimeout(() => setToast(null), 4000)
+    function showMessage(text, type = 'success') {
+        setMessage({ text, type })
+        setTimeout(() => setMessage(null), 5000)
     }
 
-    // --- C2B Logic ---
+    // --- C2B ---
 
     async function handleGenerateCode() {
-        if (!selectedAccount) {
-            showToast('Proszę wybrać rachunek', 'error')
-            return
-        }
+        if (!selectedAccount) { showMessage('Wybierz rachunek', 'error'); return }
         setLoading(true)
         try {
             const res = await generateKlikCode(selectedAccount)
             setKlikCode(res.code)
             setTimeLeft(120)
-
-            // Start countdown timer
             clearInterval(timerRef.current)
             timerRef.current = setInterval(() => {
-                setTimeLeft((prev) => {
+                setTimeLeft(prev => {
                     if (prev <= 1) {
                         clearInterval(timerRef.current)
                         clearInterval(pollRef.current)
@@ -109,11 +108,9 @@ export default function KlikPanel() {
                     return prev - 1
                 })
             }, 1000)
-
-            // Start polling for pending authorization webhook
             startPollingPending()
         } catch (err) {
-            showToast(err.message, 'error')
+            showMessage(err.message, 'error')
         } finally {
             setLoading(false)
         }
@@ -125,9 +122,8 @@ export default function KlikPanel() {
             try {
                 const pending = await getKlikPendingTransactions()
                 if (pending && pending.length > 0) {
-                    // Get the latest pending transaction
                     setPendingTx(pending[0])
-                    clearInterval(pollRef.current) // Stop polling once we find a request
+                    clearInterval(pollRef.current)
                 }
             } catch (err) {
                 console.error('Błąd pobierania transakcji oczekujących:', err)
@@ -140,30 +136,29 @@ export default function KlikPanel() {
         setLoading(true)
         try {
             await confirmKlikTransaction(pendingTx.transactionId, status)
-            showToast(
-                status === 'ACCEPTED' 
-                    ? 'Płatność zaakceptowana pomyślnie! Środki zostały zaksięgowane.' 
+            showMessage(
+                status === 'ACCEPTED'
+                    ? 'Płatność zaakceptowana. Środki zostały zaksięgowane.'
                     : 'Płatność została odrzucona.',
-                status === 'ACCEPTED' ? 'success' : 'warning'
+                status === 'ACCEPTED' ? 'success' : 'error'
             )
-            // Reset states
             setPendingTx(null)
             setKlikCode('')
             setTimeLeft(0)
             clearInterval(timerRef.current)
         } catch (err) {
-            showToast(err.message, 'error')
+            showMessage(err.message, 'error')
         } finally {
             setLoading(false)
         }
     }
 
-    // --- P2P Logic ---
+    // --- P2P ---
 
     async function handleP2pTransfer(e) {
         e.preventDefault()
         if (!selectedAccount || !p2pPhone || !p2pAmount) {
-            showToast('Wypełnij wszystkie pola formularza', 'error')
+            showMessage('Wypełnij wszystkie pola formularza', 'error')
             return
         }
         setLoading(true)
@@ -176,26 +171,22 @@ export default function KlikPanel() {
                 currency: 'EUR',
                 description: p2pDescription
             })
-            showToast(`Przelew zrealizowany pomyślnie! Odbiorca otrzymał środki. ID: ${res.id}`)
-            // Reset form
+            showMessage(`Przelew zrealizowany pomyślnie. ID: ${res.id}`)
             setP2pPhone('')
             setP2pAmount('')
             setP2pDescription('Przelew na telefon KLIK')
         } catch (err) {
-            showToast(err.message, 'error')
+            showMessage(err.message, 'error')
         } finally {
             setLoading(false)
         }
     }
 
-    // --- Alias Logic ---
+    // --- Aliases ---
 
     async function handleRegisterAlias(e) {
         e.preventDefault()
-        if (!selectedAccount || !regPhone) {
-            showToast('Podaj numer telefonu', 'error')
-            return
-        }
+        if (!selectedAccount || !regPhone) { showMessage('Podaj numer telefonu', 'error'); return }
         setLoading(true)
         try {
             const formattedPhone = toE164(regPhone)
@@ -207,12 +198,11 @@ export default function KlikPanel() {
                 iban: acc ? acc.accountNumber : 'N/A',
                 registeredAt: res.registered_at || new Date().toISOString()
             }
-            // Remove previous copy if exists and add new
             setRegisteredAliases(prev => [newAlias, ...prev.filter(a => a.phone !== formattedPhone)])
-            showToast(`Numer telefonu ${formattedPhone} został pomyślnie zarejestrowany!`)
+            showMessage(`Numer ${formattedPhone} został zarejestrowany.`)
             setRegPhone('')
         } catch (err) {
-            showToast(err.message, 'error')
+            showMessage(err.message, 'error')
         } finally {
             setLoading(false)
         }
@@ -223,305 +213,382 @@ export default function KlikPanel() {
         try {
             await unregisterKlikAlias(phone)
             setRegisteredAliases(prev => prev.filter(a => a.phone !== phone))
-            showToast(`Numer telefonu ${phone} został wyrejestrowany.`)
+            showMessage(`Numer ${phone} został wyrejestrowany.`)
         } catch (err) {
-            showToast(err.message, 'error')
+            showMessage(err.message, 'error')
         } finally {
             setLoading(false)
         }
     }
 
+    const selectedAcc = accounts.find(a => a.id === selectedAccount)
+
     return (
-        <div className="flex flex-col gap-6 max-w-4xl mx-auto">
-            {/* Header */}
-            <div className="flex items-center justify-between bg-white rounded-2xl border border-slate-200/70 p-6">
+        <div className="flex flex-col gap-4">
+            {/* Page header */}
+            <div className="flex items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                        <span className="text-pink-600 font-extrabold tracking-wider">KLIK</span> Mobile
+                    <h1 className="text-[22px] font-bold text-slate-900">
+                        Płatności KLIK
                     </h1>
-                    <p className="text-[13px] text-slate-500 mt-1">Generuj kody płatności lub wysyłaj przelewy błyskawiczne na numer telefonu.</p>
-                </div>
-                {/* Account selector */}
-                <div className="flex flex-col gap-1">
-                    <label className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Aktywny Rachunek</label>
-                    <select
-                        value={selectedAccount}
-                        onChange={(e) => setSelectedAccount(e.target.value)}
-                        className="bg-slate-50 border border-slate-200 text-slate-700 text-[13px] rounded-xl px-3 py-2 outline-none font-medium cursor-pointer"
-                    >
-                        {accounts.map(acc => (
-                            <option key={acc.id} value={acc.id}>
-                                {acc.type === 'JUNIOR' ? '🧸 ' : ''}{acc.accountNumber} ({acc.balance.toFixed(2)} {acc.currency})
-                            </option>
-                        ))}
-                    </select>
+                    <p className="text-[12px] text-slate-500 mt-1">
+                        Generuj kody płatności lub wysyłaj przelewy błyskawiczne na numer telefonu.
+                    </p>
                 </div>
             </div>
 
-            {/* Navigation tabs */}
-            <div className="flex gap-2 bg-slate-200/50 p-1.5 rounded-2xl border border-slate-200/40">
-                <button
-                    onClick={() => setActiveTab('c2b')}
-                    className={`flex-1 py-2.5 rounded-xl border-none font-medium text-[13px] cursor-pointer transition-all duration-150
-                        ${activeTab === 'c2b' ? 'bg-white text-slate-800 shadow-sm' : 'bg-transparent text-slate-500 hover:text-slate-700'}`}
-                >
-                    📱 Kod KLIK (Płatność)
-                </button>
-                <button
-                    onClick={() => setActiveTab('p2p')}
-                    className={`flex-1 py-2.5 rounded-xl border-none font-medium text-[13px] cursor-pointer transition-all duration-150
-                        ${activeTab === 'p2p' ? 'bg-white text-slate-800 shadow-sm' : 'bg-transparent text-slate-500 hover:text-slate-700'}`}
-                >
-                    💸 Przelew na telefon
-                </button>
-                <button
-                    onClick={() => setActiveTab('aliases')}
-                    className={`flex-1 py-2.5 rounded-xl border-none font-medium text-[13px] cursor-pointer transition-all duration-150
-                        ${activeTab === 'aliases' ? 'bg-white text-slate-800 shadow-sm' : 'bg-transparent text-slate-500 hover:text-slate-700'}`}
-                >
-                    ⚙️ Zarządzaj aliasami
-                </button>
-            </div>
+            {/* Inline message bar */}
+            {message && (
+                <div className={`rounded-lg border p-4 flex items-start gap-3 shadow-sm transition-all duration-300 ${
+                    message.type === 'error'
+                        ? 'bg-rose-50/90 border-rose-200/70 text-rose-900'
+                        : 'bg-emerald-50/90 border-emerald-200/70 text-emerald-900'
+                }`}>
+                    {message.type === 'error' ? (
+                        <svg className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                    ) : (
+                        <svg className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    )}
+                    <div className="flex-1 text-[13px] font-medium leading-relaxed">{message.text}</div>
+                    <button onClick={() => setMessage(null)} className="text-slate-400 hover:text-slate-600 border-none bg-transparent cursor-pointer leading-none text-[16px] px-1 focus:outline-none">×</button>
+                </div>
+            )}
 
-            {/* Tab Contents */}
-            <div className="bg-white rounded-2xl border border-slate-200/70 p-6 min-h-[350px] flex flex-col">
-                {activeTab === 'c2b' && (
-                    <div className="flex flex-col items-center justify-center flex-1 py-4">
-                        {klikCode ? (
-                            <div className="flex flex-col items-center gap-6">
-                                <p className="text-[12px] font-semibold text-slate-400 uppercase tracking-widest">Twój jednorazowy kod KLIK</p>
-                                <div className="bg-slate-50 border border-slate-200 rounded-3xl px-8 py-5 flex items-center justify-center shadow-inner">
-                                    <span className="text-5xl font-mono font-bold tracking-[0.2em] text-slate-800 pl-[0.2em]">
-                                        {klikCode}
-                                    </span>
-                                </div>
-                                <div className="flex flex-col items-center gap-1.5 w-full max-w-xs">
-                                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                                        <div 
-                                            className="bg-pink-600 h-full transition-all duration-1000 ease-linear"
-                                            style={{ width: `${(timeLeft / 120) * 100}%` }}
-                                        />
-                                    </div>
-                                    <p className="text-[13px] text-slate-500 font-medium">
-                                        Kod wygaśnie za: <span className="text-slate-800 font-bold">{timeLeft} sekund</span>
-                                    </p>
-                                </div>
-                                <p className="text-[11px] text-slate-400 text-center italic max-w-sm mt-2">
-                                    Wpisz powyższy kod w terminalu płatniczym lub u agenta płatności i zatwierdź transakcję na telefonie.
-                                </p>
-                            </div>
-                        ) : (
-                            <div className="flex flex-col items-center gap-5 text-center">
-                                <div className="w-16 h-16 bg-pink-50 rounded-2xl flex items-center justify-center text-3xl">
-                                    📱
-                                </div>
-                                <div>
-                                    <h3 className="text-lg font-bold text-slate-800">Generowanie płatności kodem</h3>
-                                    <p className="text-[13px] text-slate-500 max-w-sm mt-1">Generuje unikalny 6-cyfrowy kod, którym zapłacisz w sklepie internetowym lub stacjonarnym.</p>
-                                </div>
-                                <button
-                                    onClick={handleGenerateCode}
-                                    disabled={loading}
-                                    className="bg-pink-600 hover:bg-pink-700 text-white font-semibold text-[13px] border-none rounded-xl px-6 py-3 cursor-pointer shadow-md shadow-pink-100 transition-all duration-150 disabled:opacity-50"
-                                >
-                                    {loading ? 'Generowanie...' : 'Generuj kod KLIK'}
-                                </button>
+            <div className="grid grid-cols-[300px_1fr] gap-4 items-start">
+                {/* Left sidebar: account picker + tab nav */}
+                <div className="flex flex-col gap-4">
+                    {/* Account selector card */}
+                    <div className="bg-white rounded-2xl border border-slate-200/70 p-4 flex flex-col gap-3">
+                        <h2 className="text-[15px] font-semibold text-slate-900">Rachunek</h2>
+                        <label className="flex flex-col gap-1.5">
+                            <span className={labelClass}>Aktywny rachunek</span>
+                            <select
+                                value={selectedAccount}
+                                onChange={e => setSelectedAccount(e.target.value)}
+                                className="h-9 rounded-lg border border-slate-200 px-3 text-[12px] bg-slate-50 text-slate-800 outline-none focus:border-blue-400"
+                            >
+                                {accounts.map(acc => (
+                                    <option key={acc.id} value={acc.id}>
+                                        {acc.type === 'JUNIOR' ? '🧸 ' : ''}{acc.accountNumber}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                        {selectedAcc && (
+                            <div className="rounded-lg bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
+                                Saldo:{' '}
+                                <span className="font-semibold text-slate-700">
+                                    {formatEur(selectedAcc.balance, selectedAcc.currency)}
+                                </span>
                             </div>
                         )}
                     </div>
-                )}
 
-                {activeTab === 'p2p' && (
-                    <form onSubmit={handleP2pTransfer} className="flex flex-col gap-4 max-w-md mx-auto w-full">
-                        <h3 className="text-[15px] font-bold text-slate-800">Wyślij przelew na telefon</h3>
-                        
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Numer telefonu odbiorcy</label>
-                            <input
-                                type="tel"
-                                placeholder="np. +49 151 12345678"
-                                value={p2pPhone}
-                                onChange={(e) => setP2pPhone(e.target.value)}
-                                className="border border-slate-200 rounded-xl px-3.5 py-2.5 text-[13px] outline-none hover:border-slate-300 focus:border-blue-500 font-medium"
-                                required
-                            />
-                            <p className="text-[11px] text-slate-400 mt-0.5">Podaj numer w formacie międzynarodowym (np.&nbsp;+49&nbsp;151&nbsp;12345678) &mdash; prefiks&nbsp;+49 zostanie dodany automatycznie.</p>
-                        </div>
+                    {/* Tab navigation */}
+                    <div className="bg-white rounded-2xl border border-slate-200/70 p-1.5 flex flex-col gap-0.5">
+                        {[
+                            { id: 'c2b', label: 'Kod KLIK (Płatność)', icon: (
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                                    <rect x="5" y="2" width="14" height="20" rx="2" stroke="currentColor" strokeWidth="1.8"/>
+                                    <path d="M9 18h6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                                    <path d="M9 7h6M9 11h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                                </svg>
+                            )},
+                            { id: 'p2p', label: 'Przelew na telefon', icon: (
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                                    <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                                </svg>
+                            )},
+                            { id: 'aliases', label: 'Zarządzaj aliasami', icon: (
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                                    <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="1.8"/>
+                                    <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                                </svg>
+                            )},
+                        ].map(tab => (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id)}
+                                className={`flex items-center gap-2.5 w-full text-left px-3 py-2.5 rounded-[8px] border-none text-[12px] font-medium cursor-pointer transition-all duration-150 ${
+                                    activeTab === tab.id
+                                        ? 'bg-blue-50 text-blue-700'
+                                        : 'bg-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+                                }`}
+                            >
+                                <span className={activeTab === tab.id ? 'text-blue-600' : 'text-slate-400'}>{tab.icon}</span>
+                                {tab.label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
 
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="flex flex-col gap-1.5">
-                                <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Kwota przelewu</label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    min="0.01"
-                                    placeholder="0.00"
-                                    value={p2pAmount}
-                                    onChange={(e) => setP2pAmount(e.target.value)}
-                                    className="border border-slate-200 rounded-xl px-3.5 py-2.5 text-[13px] outline-none hover:border-slate-300 focus:border-blue-500 font-medium"
-                                    required
-                                />
-                            </div>
-                            <div className="flex flex-col gap-1.5">
-                                <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Waluta</label>
-                                <input
-                                    type="text"
-                                    value="EUR"
-                                    className="border border-slate-200 bg-slate-50 text-slate-400 rounded-xl px-3.5 py-2.5 text-[13px] outline-none font-bold"
-                                    disabled
-                                />
-                            </div>
-                        </div>
+                {/* Right content area */}
+                <div className="bg-white rounded-2xl border border-slate-200/70 p-5 min-h-[380px] flex flex-col">
 
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Tytuł przelewu</label>
-                            <input
-                                type="text"
-                                value={p2pDescription}
-                                onChange={(e) => setP2pDescription(e.target.value)}
-                                className="border border-slate-200 rounded-xl px-3.5 py-2.5 text-[13px] outline-none hover:border-slate-300 focus:border-blue-500 font-medium"
-                                required
-                            />
-                        </div>
-
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-[13px] border-none rounded-xl px-6 py-3 cursor-pointer mt-2 shadow-md shadow-blue-100 transition-all duration-150 disabled:opacity-50"
-                        >
-                            {loading ? 'Przetwarzanie...' : 'Wyślij przelew'}
-                        </button>
-                    </form>
-                )}
-
-                {activeTab === 'aliases' && (
-                    <div className="flex flex-col gap-6">
-                        {/* Registration Form */}
-                        <form onSubmit={handleRegisterAlias} className="bg-slate-50 rounded-2xl border border-slate-200/50 p-5 flex flex-col gap-4">
-                            <h3 className="text-[14px] font-bold text-slate-800">Zarejestruj nowy numer telefonu</h3>
-                            <p className="text-[12px] text-slate-500 leading-snug">
-                                Powiązanie numeru telefonu z Twoim kontem bankowym pozwoli innym użytkownikom na wysyłanie Ci natychmiastowych przelewów bez konieczności wpisywania numeru IBAN.
-                            </p>
-                            <div className="flex gap-3 items-end">
-                                <div className="flex-1 flex flex-col gap-1.5">
-                                    <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Twój numer telefonu</label>
-                                    <input
-                                        type="tel"
-                                        placeholder="np. +49 151 12345678"
-                                        value={regPhone}
-                                        onChange={(e) => setRegPhone(e.target.value)}
-                                        className="border border-slate-200 bg-white rounded-xl px-3.5 py-2.5 text-[13px] outline-none hover:border-slate-300 focus:border-blue-500 font-medium"
-                                        required
-                                    />
-                                    <p className="text-[11px] text-slate-400 mt-0.5">Podaj numer w formacie międzynarodowym (np.&nbsp;+49&nbsp;151&nbsp;12345678) &mdash; prefiks&nbsp;+49 zostanie dodany automatycznie.</p>
-                                </div>
-                                <button
-                                    type="submit"
-                                    disabled={loading}
-                                    className="bg-teal-600 hover:bg-teal-700 text-white font-semibold text-[13px] border-none rounded-xl px-6 py-3 cursor-pointer shadow-md shadow-teal-100 transition-all duration-150 h-[40px] disabled:opacity-50"
-                                >
-                                    {loading ? 'Rejestrowanie...' : 'Zarejestruj'}
-                                </button>
-                            </div>
-                        </form>
-
-                        {/* Alias list */}
-                        <div className="flex flex-col gap-3">
-                            <h3 className="text-[14px] font-bold text-slate-800">Aktywne numery zarejestrowane w KLIK</h3>
-                            {registeredAliases.length === 0 ? (
-                                <div className="text-center py-6 border border-dashed border-slate-200 rounded-2xl text-slate-400 text-[12px]">
-                                    Nie zarejestrowano jeszcze żadnego numeru telefonu w systemie KLIK.
+                    {/* ── C2B Tab ── */}
+                    {activeTab === 'c2b' && (
+                        <div className="flex flex-col flex-1">
+                            <h2 className="text-[15px] font-semibold text-slate-900 mb-4">Generowanie kodu płatności</h2>
+                            {klikCode ? (
+                                <div className="flex flex-col items-center gap-6 flex-1 justify-center">
+                                    <p className={labelClass + ' uppercase tracking-widest'}>Twój jednorazowy kod KLIK</p>
+                                    <div className="bg-slate-50 border border-slate-200 rounded-lg px-10 py-6 flex items-center justify-center">
+                                        <span className="text-5xl font-mono font-bold tracking-[0.22em] text-slate-800 pl-[0.22em] select-all">
+                                            {klikCode}
+                                        </span>
+                                    </div>
+                                    <div className="flex flex-col items-center gap-2 w-full max-w-xs">
+                                        <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                                            <div
+                                                className={`h-full transition-all duration-1000 ease-linear rounded-full ${timeLeft > 40 ? 'bg-emerald-500' : timeLeft > 15 ? 'bg-amber-500' : 'bg-rose-500'}`}
+                                                style={{ width: `${(timeLeft / 120) * 100}%` }}
+                                            />
+                                        </div>
+                                        <p className="text-[12px] text-slate-500">
+                                            Kod wygaśnie za{' '}
+                                            <span className="font-semibold text-slate-800">{timeLeft} s</span>
+                                        </p>
+                                    </div>
+                                    <p className="text-[11px] text-slate-400 text-center max-w-sm">
+                                        Wpisz kod w terminalu płatniczym lub u agenta i zatwierdź transakcję.
+                                    </p>
                                 </div>
                             ) : (
-                                <div className="flex flex-col gap-2">
-                                    {registeredAliases.map((alias) => (
-                                        <div key={alias.phone} className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-4 py-3.5 shadow-sm">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-full bg-teal-50 text-teal-600 flex items-center justify-center font-bold text-[14px]">
-                                                    ✓
-                                                </div>
-                                                <div>
-                                                    <p className="text-[13px] font-bold text-slate-800">{alias.phone}</p>
-                                                    <p className="text-[11px] text-slate-400">Rachunek: {alias.iban}</p>
-                                                </div>
-                                            </div>
-                                            <button
-                                                onClick={() => handleUnregisterAlias(alias.phone)}
-                                                disabled={loading}
-                                                className="bg-transparent border-none text-red-500 hover:text-red-700 font-medium text-[12px] cursor-pointer"
-                                            >
-                                                Wyrejestruj
-                                            </button>
-                                        </div>
-                                    ))}
+                                <div className="flex flex-col items-center justify-center gap-5 flex-1 text-center">
+                                    <div className="w-14 h-14 bg-slate-100 rounded-lg flex items-center justify-center">
+                                        <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+                                            <rect x="5" y="2" width="14" height="20" rx="2" stroke="#64748b" strokeWidth="1.6"/>
+                                            <path d="M9 18h6" stroke="#64748b" strokeWidth="1.6" strokeLinecap="round"/>
+                                            <path d="M9 7h6M9 11h4" stroke="#64748b" strokeWidth="1.6" strokeLinecap="round"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <p className="text-[14px] font-semibold text-slate-800">Generowanie płatności kodem</p>
+                                        <p className="text-[12px] text-slate-500 mt-1 max-w-xs">
+                                            Generuje jednorazowy 6-cyfrowy kod KLIK do płatności w sklepie internetowym lub stacjonarnym.
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={handleGenerateCode}
+                                        disabled={loading || !selectedAccount}
+                                        className="h-10 px-6 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-[13px] border-none rounded-lg cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {loading ? 'Generowanie...' : 'Generuj kod KLIK'}
+                                    </button>
                                 </div>
                             )}
                         </div>
-                    </div>
-                )}
+                    )}
+
+                    {/* ── P2P Tab ── */}
+                    {activeTab === 'p2p' && (
+                        <form onSubmit={handleP2pTransfer} className="flex flex-col gap-4">
+                            <h2 className="text-[15px] font-semibold text-slate-900">Przelew na telefon</h2>
+
+                            <label className="flex flex-col">
+                                <span className={labelClass}>Numer telefonu odbiorcy</span>
+                                <input
+                                    type="tel"
+                                    placeholder="np. +49 151 12345678"
+                                    value={p2pPhone}
+                                    onChange={e => setP2pPhone(e.target.value)}
+                                    className={inputClass}
+                                    required
+                                />
+                                <span className="text-[10px] text-slate-400 mt-1">
+                                    Prefiks +49 zostanie dodany automatycznie dla numerów bez kodu kraju.
+                                </span>
+                            </label>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <label className="flex flex-col">
+                                    <span className={labelClass}>Kwota</span>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0.01"
+                                        placeholder="0.00"
+                                        value={p2pAmount}
+                                        onChange={e => setP2pAmount(e.target.value)}
+                                        className={inputClass}
+                                        required
+                                    />
+                                </label>
+                                <label className="flex flex-col">
+                                    <span className={labelClass}>Waluta</span>
+                                    <input
+                                        type="text"
+                                        value="EUR"
+                                        className={inputClass + ' opacity-60 cursor-not-allowed'}
+                                        disabled
+                                    />
+                                </label>
+                            </div>
+
+                            <label className="flex flex-col">
+                                <span className={labelClass}>Tytuł przelewu</span>
+                                <input
+                                    type="text"
+                                    value={p2pDescription}
+                                    onChange={e => setP2pDescription(e.target.value)}
+                                    className={inputClass}
+                                    required
+                                />
+                            </label>
+
+                            <div className="rounded-lg bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
+                                Rachunek obciążony:{' '}
+                                <span className="font-semibold text-slate-700 font-mono">
+                                    {selectedAcc?.accountNumber || '—'}
+                                </span>
+                            </div>
+
+                            <button
+                                type="submit"
+                                disabled={loading || !selectedAccount}
+                                className="h-10 px-6 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-[13px] border-none rounded-lg cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed self-start"
+                            >
+                                {loading ? 'Przetwarzanie...' : 'Wyślij przelew'}
+                            </button>
+                        </form>
+                    )}
+
+                    {/* ── Aliases Tab ── */}
+                    {activeTab === 'aliases' && (
+                        <div className="flex flex-col gap-5">
+                            <h2 className="text-[15px] font-semibold text-slate-900">Zarządzaj aliasami</h2>
+
+                            {/* Registration form */}
+                            <form onSubmit={handleRegisterAlias} className="flex flex-col gap-3 bg-slate-50 rounded-lg border border-slate-200 p-4">
+                                <div>
+                                    <p className="text-[13px] font-semibold text-slate-800">Zarejestruj nowy numer</p>
+                                    <p className="text-[11px] text-slate-500 mt-0.5">
+                                        Powiązanie numeru telefonu z rachunkiem umożliwia innym użytkownikom wysyłanie Ci przelewów bez podawania IBAN.
+                                    </p>
+                                </div>
+                                <div className="flex gap-2 items-center">
+                                    <label className="flex flex-col flex-1">
+                                        <span className={labelClass}>Twój numer telefonu</span>
+                                        <input
+                                            type="tel"
+                                            placeholder="np. +49 151 12345678"
+                                            value={regPhone}
+                                            onChange={e => setRegPhone(e.target.value)}
+                                            className={inputClass}
+                                            required
+                                        />
+                                        <span className="text-[10px] text-slate-400 mt-1">
+                                            Prefiks +49 zostanie dodany automatycznie.
+                                        </span>
+                                    </label>
+                                    <button
+                                        type="submit"
+                                        disabled={loading}
+                                        className="h-9 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-[12px] border-none rounded-[9px] cursor-pointer transition-colors disabled:opacity-50 shrink-0"
+                                    >
+                                        {loading ? 'Rejestrowanie...' : 'Zarejestruj'}
+                                    </button>
+                                </div>
+                            </form>
+
+                            {/* Alias list */}
+                            <div className="flex flex-col gap-2">
+                                <p className="text-[13px] font-semibold text-slate-800">Aktywne aliasy</p>
+                                {registeredAliases.length === 0 ? (
+                                    <div className="text-center py-8 border border-dashed border-slate-200 rounded-lg text-slate-400 text-[12px]">
+                                        Nie zarejestrowano jeszcze żadnego numeru telefonu w systemie KLIK.
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col gap-2">
+                                        {registeredAliases.map(alias => (
+                                            <div
+                                                key={alias.phone}
+                                                className="flex items-center justify-between bg-white border border-slate-200 rounded-lg px-4 py-3"
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                                                            <path d="M5 13l4 4L19 7" stroke="#059669" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                                        </svg>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[12px] font-semibold text-slate-800 font-mono">{alias.phone}</p>
+                                                        <p className="text-[10px] text-slate-400">Rachunek: {alias.iban}</p>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => handleUnregisterAlias(alias.phone)}
+                                                    disabled={loading}
+                                                    className="text-[11px] font-medium text-rose-600 hover:text-rose-800 bg-transparent border-none cursor-pointer disabled:opacity-50 transition-colors"
+                                                >
+                                                    Wyrejestruj
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
             </div>
 
-            {/* Webhook Authorization Request Overlay Modal */}
+            {/* Pending transaction modal */}
             {pendingTx && (
                 <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-                    <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-sm w-full p-6 flex flex-col gap-5 animate-in zoom-in-95 duration-200">
+                    <div className="bg-white rounded-lg border border-slate-200 shadow-2xl max-w-sm w-full p-6 flex flex-col gap-5">
                         <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 bg-pink-100 text-pink-600 rounded-2xl flex items-center justify-center text-xl shrink-0 animate-bounce">
-                                🔔
+                            <div className="w-11 h-11 bg-amber-50 rounded-lg flex items-center justify-center shrink-0">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0" stroke="#d97706" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                                </svg>
                             </div>
                             <div>
-                                <h3 className="text-[16px] font-bold text-slate-800">Prośba o płatność KLIK</h3>
-                                <p className="text-[12px] text-slate-400">Wymaga autoryzacji PIN-em w banku</p>
+                                <p className="text-[14px] font-semibold text-slate-900">Prośba o płatność KLIK</p>
+                                <p className="text-[11px] text-slate-400">Wymaga autoryzacji</p>
                             </div>
                         </div>
 
-                        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col gap-2.5">
-                            <div className="flex justify-between items-center text-[13px]">
-                                <span className="text-slate-500">Kwota płatności:</span>
-                                <span className="font-bold text-slate-800 text-[15px]">{pendingTx.amount.toFixed(2)} {pendingTx.currency}</span>
+                        <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 flex flex-col gap-2.5">
+                            <div className="flex justify-between items-center">
+                                <span className="text-[12px] text-slate-500">Kwota:</span>
+                                <span className="text-[14px] font-bold text-slate-900">
+                                    {formatEur(pendingTx.amount, pendingTx.currency)}
+                                </span>
                             </div>
-                            <div className="flex justify-between items-center text-[13px]">
-                                <span className="text-slate-500">Odbiorca:</span>
-                                <span className="font-semibold text-slate-800 truncate max-w-[180px]" title={pendingTx.merchantName}>
+                            <div className="flex justify-between items-center">
+                                <span className="text-[12px] text-slate-500">Odbiorca:</span>
+                                <span className="text-[12px] font-semibold text-slate-800 truncate max-w-[180px]">
                                     {pendingTx.merchantName}
                                 </span>
                             </div>
                         </div>
 
-                        <p className="text-[11px] text-slate-400 text-center leading-normal">
-                            Potwierdzając, wyrażasz zgodę na obciążenie Twojego rachunku wskazaną kwotą płatności.
+                        <p className="text-[11px] text-slate-400 text-center">
+                            Potwierdzając, wyrażasz zgodę na obciążenie rachunku wskazaną kwotą.
                         </p>
 
-                        <div className="flex gap-3 mt-1">
+                        <div className="flex gap-2">
                             <button
                                 onClick={() => handleConfirmTransaction('REJECTED')}
                                 disabled={loading}
-                                className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 border-none rounded-xl text-slate-600 font-bold text-[13px] cursor-pointer transition-colors"
+                                className="flex-1 h-10 bg-slate-100 hover:bg-slate-200 border-none rounded-lg text-slate-700 font-semibold text-[13px] cursor-pointer transition-colors disabled:opacity-50"
                             >
                                 Odrzuć
                             </button>
                             <button
                                 onClick={() => handleConfirmTransaction('ACCEPTED')}
                                 disabled={loading}
-                                className="flex-1 py-3 bg-pink-600 hover:bg-pink-700 border-none rounded-xl text-white font-bold text-[13px] cursor-pointer transition-colors shadow-md shadow-pink-100"
+                                className="flex-1 h-10 bg-blue-600 hover:bg-blue-700 border-none rounded-lg text-white font-semibold text-[13px] cursor-pointer transition-colors disabled:opacity-50"
                             >
-                                Potwierdź
+                                {loading ? '...' : 'Potwierdź'}
                             </button>
                         </div>
                     </div>
-                </div>
-            )}
-
-            {/* Floating toast notification inside panel */}
-            {toast && (
-                <div className={`fixed bottom-6 right-6 px-4 py-3 rounded-2xl border text-white shadow-lg text-[13px] z-[999] font-medium animate-in slide-in-from-bottom duration-200
-                    ${toast.type === 'error' ? 'bg-red-600 border-red-500' : ''}
-                    ${toast.type === 'warning' ? 'bg-amber-600 border-amber-500' : ''}
-                    ${toast.type === 'success' ? 'bg-slate-900 border-slate-800' : ''}`}>
-                    {toast.type === 'error' && '❌ '}
-                    {toast.type === 'warning' && '⚠️ '}
-                    {toast.type === 'success' && '✨ '}
-                    {toast.message}
                 </div>
             )}
         </div>

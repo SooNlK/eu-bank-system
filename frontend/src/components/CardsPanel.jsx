@@ -213,13 +213,13 @@ export default function CardsPanel() {
         <div className="flex flex-col gap-4">
             <div className="flex items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-[22px] font-semibold text-slate-900">Karty płatnicze</h1>
+                    <h1 className="text-[22px] font-bold text-slate-900">Karty płatnicze</h1>
                     <p className="text-[12px] text-slate-500 mt-1">Wydawanie i obsługa kart przez zewnętrzną sieć kartową.</p>
                 </div>
             </div>
 
             {message && (
-                <div className={`rounded-xl border p-4 flex items-start gap-3 shadow-sm transition-all duration-300 ${
+                <div className={`rounded-lg border p-4 flex items-start gap-3 shadow-sm transition-all duration-300 ${
                     message.type === 'error' 
                         ? 'bg-rose-50/90 border-rose-200/70 text-rose-900' 
                         : 'bg-emerald-50/90 border-emerald-200/70 text-emerald-900'
@@ -248,7 +248,7 @@ export default function CardsPanel() {
             <div className="flex flex-col gap-4">
                 <div className={`grid ${isJuniorUser ? 'grid-cols-1' : 'grid-cols-[360px_1fr]'} gap-4 items-stretch`}>
                     {!isJuniorUser && (
-                        <form onSubmit={handleIssue} className="bg-white rounded-lg border border-slate-200 p-4 flex flex-col justify-between h-full">
+                        <form onSubmit={handleIssue} className="bg-white rounded-2xl border border-slate-200/70 p-4 flex flex-col justify-between h-full">
                             <div className="flex flex-col gap-3">
                                 <h2 className="text-[15px] font-semibold text-slate-900">Nowa karta</h2>
 
@@ -433,7 +433,7 @@ export default function CardsPanel() {
                 </div>
 
                 {/* Twoje karty bottom row */}
-                <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+                <div className="bg-white rounded-2xl border border-slate-200/70 overflow-hidden">
                     <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
                         <h2 className="text-[15px] font-semibold text-slate-900">Twoje karty</h2>
                         <span className="text-[11px] text-slate-500">{cards.length} kart</span>
