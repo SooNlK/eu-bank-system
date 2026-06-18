@@ -1,11 +1,15 @@
 package com.bank.api;
 
+import com.bank.service.KlikService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -13,10 +17,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class KlikWebhookControllerTest {
 
     private MockMvc mockMvc;
+    private KlikService klikService;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new KlikWebhookController()).build();
+        klikService = mock(KlikService.class);
+        mockMvc = MockMvcBuilders.standaloneSetup(new KlikWebhookController(klikService)).build();
     }
 
     @Test
@@ -42,7 +48,7 @@ class KlikWebhookControllerTest {
         String authorizePayload = """
                 {
                     "transaction_id": "550e8400-e29b-41d4-a716-446655440000",
-                    "user_id": "client-123",
+                    "user_id": "550e8400-e29b-41d4-a716-446655441111",
                     "amount": 100.50,
                     "currency": "EUR",
                     "merchant_name": "Sklep Testowy",
@@ -51,6 +57,10 @@ class KlikWebhookControllerTest {
                     "zone": "EU"
                 }
                 """;
+
+        when(klikService.authorizeWebhook(any())).thenReturn(
+                new KlikWebhookController.AuthorizeResponse(true, true)
+        );
 
         mockMvc.perform(post("/api/v1/klik/authorize")
                         .contentType(MediaType.APPLICATION_JSON)

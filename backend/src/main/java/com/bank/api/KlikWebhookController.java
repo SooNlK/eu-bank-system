@@ -1,5 +1,6 @@
 package com.bank.api;
 
+import com.bank.service.KlikService;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -21,6 +22,12 @@ public class KlikWebhookController {
 
     private static final Logger log = LoggerFactory.getLogger(KlikWebhookController.class);
 
+    private final KlikService klikService;
+
+    public KlikWebhookController(KlikService klikService) {
+        this.klikService = klikService;
+    }
+
     /**
      * Test połączenia (liveness check) ze strony serwera KLIK.
      */
@@ -32,8 +39,7 @@ public class KlikWebhookController {
     }
 
     /**
-     * Szkielet webhooka autoryzacyjnego (A3 w diagramach sekwencji).
-     * Zostanie w pełni zaimplementowany w Kroku 1 integracji.
+     * Webhook autoryzacyjny (A3 w diagramach sekwencji).
      */
     @PostMapping("/authorize")
     @Operation(summary = "Webhook autoryzacyjny", description = "Zlecenie autoryzacji płatności kodem KLIK (przepływ C2B).")
@@ -41,8 +47,7 @@ public class KlikWebhookController {
         log.info("Received C2B authorization request from KLIK: transactionId={}, userId={}, amount={} {}", 
                 request.transactionId(), request.userId(), request.amount(), request.currency());
         
-        // Szkielet: zwracamy 200 OK informujące o przyjęciu zlecenia do pokazania klientowi
-        return ResponseEntity.ok(new AuthorizeResponse(true, true));
+        return ResponseEntity.ok(klikService.authorizeWebhook(request));
     }
 
     // ==========================================
