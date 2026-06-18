@@ -62,6 +62,22 @@ export default function KlikPanel() {
         localStorage.setItem('klik_registered_aliases', JSON.stringify(registeredAliases))
     }, [registeredAliases])
 
+    // Convert any phone number to E.164 format (+49XXXXXXXXXX for Germany/EU zone)
+    function toE164(raw) {
+        // Remove all whitespace, hyphens and parentheses
+        let num = raw.replace(/[\s\-()]/g, '')
+        // Already in E.164 format
+        if (/^\+\d{7,15}$/.test(num)) return num
+        // Starts with 00 country code (e.g. 0049...)
+        if (/^00\d{7,15}$/.test(num)) return '+' + num.slice(2)
+        // German local number starting with 0 (e.g. 030..., 0151...)
+        if (/^0\d{5,14}$/.test(num)) return '+49' + num.slice(1)
+        // Number without any prefix - assume Germany +49
+        if (/^\d{5,14}$/.test(num)) return '+49' + num
+        // Return as-is and let backend validate
+        return num
+    }
+
     function showToast(message, type = 'success') {
         setToast({ message, type })
         setTimeout(() => setToast(null), 4000)
@@ -152,9 +168,10 @@ export default function KlikPanel() {
         }
         setLoading(true)
         try {
+            const formattedPhone = toE164(p2pPhone)
             const res = await createKlikP2pTransfer({
                 fromAccountId: selectedAccount,
-                toPhone: p2pPhone,
+                toPhone: formattedPhone,
                 amount: parseFloat(p2pAmount),
                 currency: 'EUR',
                 description: p2pDescription
@@ -181,17 +198,18 @@ export default function KlikPanel() {
         }
         setLoading(true)
         try {
-            const res = await registerKlikAlias(selectedAccount, regPhone)
+            const formattedPhone = toE164(regPhone)
+            const res = await registerKlikAlias(selectedAccount, formattedPhone)
             const acc = accounts.find(a => a.id === selectedAccount)
             const newAlias = {
-                phone: regPhone,
+                phone: formattedPhone,
                 accountId: selectedAccount,
                 iban: acc ? acc.accountNumber : 'N/A',
                 registeredAt: res.registered_at || new Date().toISOString()
             }
             // Remove previous copy if exists and add new
-            setRegisteredAliases(prev => [newAlias, ...prev.filter(a => a.phone !== regPhone)])
-            showToast(`Numer telefonu ${regPhone} został pomyślnie zarejestrowany!`)
+            setRegisteredAliases(prev => [newAlias, ...prev.filter(a => a.phone !== formattedPhone)])
+            showToast(`Numer telefonu ${formattedPhone} został pomyślnie zarejestrowany!`)
             setRegPhone('')
         } catch (err) {
             showToast(err.message, 'error')
@@ -321,12 +339,13 @@ export default function KlikPanel() {
                             <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Numer telefonu odbiorcy</label>
                             <input
                                 type="tel"
-                                placeholder="np. +48123456789"
+                                placeholder="np. +49 151 12345678"
                                 value={p2pPhone}
                                 onChange={(e) => setP2pPhone(e.target.value)}
                                 className="border border-slate-200 rounded-xl px-3.5 py-2.5 text-[13px] outline-none hover:border-slate-300 focus:border-blue-500 font-medium"
                                 required
                             />
+                            <p className="text-[11px] text-slate-400 mt-0.5">Podaj numer w formacie międzynarodowym (np.&nbsp;+49&nbsp;151&nbsp;12345678) &mdash; prefiks&nbsp;+49 zostanie dodany automatycznie.</p>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
@@ -388,12 +407,13 @@ export default function KlikPanel() {
                                     <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Twój numer telefonu</label>
                                     <input
                                         type="tel"
-                                        placeholder="np. +48123456789"
+                                        placeholder="np. +49 151 12345678"
                                         value={regPhone}
                                         onChange={(e) => setRegPhone(e.target.value)}
                                         className="border border-slate-200 bg-white rounded-xl px-3.5 py-2.5 text-[13px] outline-none hover:border-slate-300 focus:border-blue-500 font-medium"
                                         required
                                     />
+                                    <p className="text-[11px] text-slate-400 mt-0.5">Podaj numer w formacie międzynarodowym (np.&nbsp;+49&nbsp;151&nbsp;12345678) &mdash; prefiks&nbsp;+49 zostanie dodany automatycznie.</p>
                                 </div>
                                 <button
                                     type="submit"

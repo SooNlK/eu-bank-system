@@ -21,9 +21,10 @@ function getHeaders() {
 async function readError(response) {
     try {
         const body = await response.json()
-        return body.message || "Błąd żądania"
+        // Backend may return { error: { message: "..." } } or { message: "..." }
+        return (body.error && body.error.message) || body.message || `Błąd serwera: ${response.status} ${response.statusText}`
     } catch {
-        return "Błąd żądania"
+        return `Błąd serwera: ${response.status} ${response.statusText}`
     }
 }
 

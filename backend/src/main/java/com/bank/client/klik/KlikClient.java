@@ -40,9 +40,9 @@ public class KlikClient {
                 userId, props.zone(), idempotencyKey);
 
         return restClient.post()
-                .uri("/codes/generate")
+                .uri("/api/v1/codes/generate")
                 .contentType(MediaType.APPLICATION_JSON)
-                .header("X-KLIK-Api-Key", props.apiKey())
+                .header("X-KLIK-Bank-Api-Key", props.bankApiKey())
                 .header("Idempotency-Key", idempotencyKey)
                 .body(new CodeGenerateRequest(userId, props.zone()))
                 .retrieve()
@@ -59,9 +59,9 @@ public class KlikClient {
 
         PaymentConfirmRequest body = new PaymentConfirmRequest(transactionId, status, rejectReason);
         return restClient.post()
-                .uri("/payments/confirm")
+                .uri("/api/v1/payments/confirm")
                 .contentType(MediaType.APPLICATION_JSON)
-                .header("X-KLIK-Api-Key", props.apiKey())
+                .header("X-KLIK-Bank-Api-Key", props.bankApiKey())
                 .header("Idempotency-Key", idempotencyKey)
                 .body(body)
                 .retrieve()
@@ -87,7 +87,7 @@ public class KlikClient {
         );
 
         return restClient.post()
-                .uri("/aliases/register")
+                .uri("/api/v1/aliases/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .header("X-KLIK-Bank-Api-Key", props.bankApiKey())
                 .header("Idempotency-Key", idempotencyKey)
@@ -103,7 +103,7 @@ public class KlikClient {
         log.info("Looking up KLIK alias for phone: {}", phone);
 
         return restClient.get()
-                .uri("/aliases/lookup/{phone}", phone)
+                .uri("/api/v1/aliases/lookup/{phone}", phone)
                 .header("X-KLIK-Bank-Api-Key", props.bankApiKey())
                 .retrieve()
                 .body(AliasLookupResponse.class);
@@ -117,7 +117,7 @@ public class KlikClient {
         log.info("Deleting KLIK alias for phone: {} (Idempotency-Key: {})", phone, idempotencyKey);
 
         restClient.delete()
-                .uri("/aliases/{phone}", phone)
+                .uri("/api/v1/aliases/{phone}", phone)
                 .header("X-KLIK-Bank-Api-Key", props.bankApiKey())
                 .header("Idempotency-Key", idempotencyKey)
                 .retrieve()
