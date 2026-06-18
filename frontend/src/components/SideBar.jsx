@@ -9,10 +9,12 @@ export default function Sidebar({ activeNav, onNavChange, userEmail, isJunior, p
     const items = isJunior ? [
         { id: 'dashboard', label: 'Pulpit 🧸', icon: HomeIcon },
         { id: 'cards', label: 'Karta 💳', icon: CardIcon },
+        { id: 'klik', label: 'KLIK / BLIK 📱', icon: PhoneIcon },
         { id: 'internal', label: 'Przelew 🚀', icon: RocketIcon }
     ] : [
         { id: 'dashboard', label: 'Pulpit', icon: HomeIcon },
         { id: 'cards', label: 'Karty', icon: CardIcon },
+        { id: 'klik', label: 'Płatności KLIK', icon: PhoneIcon },
         { id: 'transfers', label: 'Przelewy', icon: ActivityIcon },
         { id: 'junior', label: 'Strefa Rodzica', icon: ChildIcon }
     ]
@@ -150,6 +152,15 @@ function GlobeIcon({ size = 16, color = 'currentColor' }) {
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
             <circle cx="12" cy="12" r="9" stroke={color} strokeWidth="1.8" />
             <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10A15.3 15.3 0 0 1 8 12 15.3 15.3 0 0 1 12 2z" stroke={color} strokeWidth="1.8" />
+        </svg>
+    )
+}
+
+function PhoneIcon({ size = 16, color = 'currentColor' }) {
+    return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+            <rect x="5" y="2" width="14" height="20" rx="3" stroke={color} strokeWidth="1.8" />
+            <path d="M12 18h.01" stroke={color} strokeWidth="2" strokeLinecap="round" />
         </svg>
     )
 }
