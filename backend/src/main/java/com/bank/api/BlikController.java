@@ -4,6 +4,10 @@ import com.bank.dto.blik.BlikConfirmRequest;
 import com.bank.dto.blik.BlikGenerateRequest;
 import com.bank.dto.blik.BlikGenerateResponse;
 import com.bank.dto.blik.BlikPendingResponse;
+import com.bank.dto.blik.BlikRegisterAliasRequest;
+import com.bank.dto.blik.BlikP2pTransferRequest;
+import com.bank.dto.transfer.TransferResponse;
+import com.bank.client.klik.KlikClient;
 import com.bank.service.KlikService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -92,5 +96,61 @@ public class BlikController {
     ) {
         klikService.confirmTransaction(request.transactionId(), request.status(), authentication.getName());
         return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/p2p/register")
+    @Operation(summary = "Rejestracja aliasu P2P (telefon)",
+            description = "Rejestruje numer telefonu powiązany z IBAN wybranego rachunku w systemie KLIK.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Alias zarejestrowany pomyślnie",
+                    content = @Content(schema = @Schema(implementation = KlikClient.AliasRegisterResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Rachunek nie istnieje", content = @Content),
+            @ApiResponse(responseCode = "403", description = "Brak dostępu do rachunku", content = @Content),
+            @ApiResponse(responseCode = "400", description = "Błąd walidacji", content = @Content),
+            @ApiResponse(responseCode = "401", description = "Brak autoryzacji", content = @Content)
+    })
+    public ResponseEntity<KlikClient.AliasRegisterResponse> registerAlias(
+            @Valid @RequestBody BlikRegisterAliasRequest request,
+            Authentication authentication
+    ) {
+        KlikClient.AliasRegisterResponse response = klikService.registerAlias(
+                request.accountId(), request.phone(), authentication.getName()
+        );
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @DeleteMapping("/p2p/unregister")
+    @Operation(summary = "Wyrejestrowanie aliasu P2P (telefon)",
+            description = "Usuwa rejestrację numeru telefonu w systemie KLIK.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Alias usunięty pomyślnie"),
+            @ApiResponse(responseCode = "404", description = "Alias nie istnieje", content = @Content),
+            @ApiResponse(responseCode = "403", description = "Brak dostępu (alias nie należy do zalogowanego klienta)", content = @Content),
+            @ApiResponse(responseCode = "401", description = "Brak autoryzacji", content = @Content)
+    })
+    public ResponseEntity<Void> unregisterAlias(
+            @RequestParam String phone,
+            Authentication authentication
+    ) {
+        klikService.deleteAlias(phone, authentication.getName());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/p2p/transfer")
+    @Operation(summary = "Przelew na telefon P2P KLIK",
+            description = "Wykonuje wyszukanie IBAN powiązanego z numerem telefonu w KLIK i zleca przelew SEPA Instant lub wewnętrzny.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Przelew zlecony pomyślnie",
+                    content = @Content(schema = @Schema(implementation = TransferResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Odbiorca nie posiada zarejestrowanego numeru w KLIK", content = @Content),
+            @ApiResponse(responseCode = "400", description = "Błąd walidacji lub niewystarczające środki", content = @Content),
+            @ApiResponse(responseCode = "401", description = "Brak autoryzacji", content = @Content)
+    })
+    public ResponseEntity<TransferResponse> p2pTransfer(
+            @Valid @RequestBody BlikP2pTransferRequest request,
+            Authentication authentication
+    ) {
+        TransferResponse response = klikService.p2pTransfer(request, authentication.getName());
+        return ResponseEntity.ok(response);
     }
 }

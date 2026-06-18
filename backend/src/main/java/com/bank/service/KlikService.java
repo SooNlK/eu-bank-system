@@ -24,6 +24,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.bank.dto.blik.BlikP2pTransferRequest;
+import com.bank.dto.transfer.TransferRequest;
+import com.bank.dto.transfer.TransferResponse;
+import com.bank.domain.transfer.TransferChannel;
+import java.time.LocalDate;
+
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -44,6 +50,7 @@ public class KlikService {
     private final TransactionRepository transactionRepository;
     private final CustomerRepository customerRepository;
     private final AccountService accountService;
+    private final TransferService transferService;
 
     public KlikService(
             KlikClient klikClient,
@@ -52,7 +59,8 @@ public class KlikService {
             AccountRepository accountRepository,
             TransactionRepository transactionRepository,
             CustomerRepository customerRepository,
-            AccountService accountService
+            AccountService accountService,
+            TransferService transferService
     ) {
         this.klikClient = klikClient;
         this.klikCodeRepository = klikCodeRepository;
@@ -61,6 +69,7 @@ public class KlikService {
         this.transactionRepository = transactionRepository;
         this.customerRepository = customerRepository;
         this.accountService = accountService;
+        this.transferService = transferService;
     }
 
     /**
@@ -274,5 +283,107 @@ public class KlikService {
         } catch (Exception e) {
             throw new RuntimeException("Failed to hash code with SHA-256", e);
         }
+    }
+
+    /**
+     * Rejestruje alias (numer telefonu) dla wybranego rachunku w KLIK.
+     */
+    @Transactional
+    public KlikClient.AliasRegisterResponse registerAlias(UUID accountId, String phone, String customerEmail) {
+        Account account;
+        try {
+            account = accountService.getAccountEntity(accountId, customerEmail);
+        } catch (RuntimeException e) {
+            if ("Access denied".equals(e.getMessage())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Brak dostępu do podanego rachunku.");
+            } else if ("Account not found".equals(e.getMessage())) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Rachunek nie istnieje.");
+            } else {
+                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, e.getMessage());
+            }
+        }
+
+        return klikClient.registerAlias(phone, account.getAccountNumber().getValue());
+    }
+
+    /**
+     * Wyrejestrowuje alias (numer telefonu) z systemu KLIK.
+     */
+    @Transactional
+    public void deleteAlias(String phone, String customerEmail) {
+        KlikClient.AliasLookupResponse lookup;
+        try {
+            lookup = klikClient.lookupAlias(phone);
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Podany alias nie istnieje w systemie KLIK.");
+        }
+
+        if (lookup != null && lookup.accountIdentifier() != null) {
+            String iban = lookup.accountIdentifier().value();
+            Account account = accountRepository.findByAccountNumber_Value(iban)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Brak dostępu do usunięcia tego aliasu."));
+
+            if (!account.getCustomer().getEmail().equals(customerEmail)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Brak dostępu do usunięcia tego aliasu.");
+            }
+        }
+
+        klikClient.deleteAlias(phone);
+    }
+
+    /**
+     * Wykonuje przelew P2P na telefon przy użyciu systemu KLIK i SEPA Instant / przelewu wewnętrznego.
+     */
+    @Transactional
+    public TransferResponse p2pTransfer(BlikP2pTransferRequest request, String customerEmail) {
+        // 1. Weryfikacja konta nadawcy
+        Account fromAccount;
+        try {
+            fromAccount = accountService.getAccountEntity(request.fromAccountId(), customerEmail);
+        } catch (RuntimeException e) {
+            if ("Access denied".equals(e.getMessage())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Brak dostępu do podanego rachunku.");
+            } else if ("Account not found".equals(e.getMessage())) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Rachunek nie istnieje.");
+            } else {
+                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, e.getMessage());
+            }
+        }
+
+        // 2. Lookup aliasu odbiorcy w systemie KLIK
+        KlikClient.AliasLookupResponse lookup;
+        try {
+            lookup = klikClient.lookupAlias(request.toPhone());
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Odbiorca o podanym numerze telefonu nie jest zarejestrowany w KLIK.");
+        }
+
+        if (lookup == null || lookup.accountIdentifier() == null || !"iban".equalsIgnoreCase(lookup.accountIdentifier().type())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Nie udało się odnaleźć rachunku IBAN dla podanego numeru telefonu.");
+        }
+
+        String targetIban = lookup.accountIdentifier().value();
+
+        // 3. Wybór odpowiedniego kanału płatności (INTERNAL dla naszego banku, SEPA_INSTANT dla zewnętrznych)
+        TransferChannel channel = transferService.isAccountOurs(targetIban)
+                ? TransferChannel.INTERNAL
+                : TransferChannel.SEPA_INSTANT;
+
+        // 4. Budowanie i wykonanie zlecenia przelewu
+        TransferRequest transferRequest = new TransferRequest(
+                request.fromAccountId(),
+                targetIban,
+                request.amount(),
+                request.currency(),
+                LocalDate.now(),
+                channel,
+                request.description() != null ? request.description() : "Przelew na telefon KLIK",
+                null, // toBic
+                "Odbiorca KLIK P2P",
+                null,
+                null
+        );
+
+        return transferService.execute(transferRequest, customerEmail);
     }
 }

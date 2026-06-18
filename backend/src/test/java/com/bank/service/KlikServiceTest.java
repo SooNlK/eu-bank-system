@@ -14,6 +14,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
+import com.bank.dto.blik.BlikP2pTransferRequest;
+import com.bank.dto.transfer.TransferResponse;
+import com.bank.domain.transfer.TransferChannel;
+import com.bank.domain.shared.AccountNumber;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -34,6 +38,7 @@ class KlikServiceTest {
     private TransactionRepository transactionRepository;
     private CustomerRepository customerRepository;
     private AccountService accountService;
+    private TransferService transferService;
 
     private KlikService klikService;
 
@@ -46,6 +51,7 @@ class KlikServiceTest {
         transactionRepository = mock(TransactionRepository.class);
         customerRepository = mock(CustomerRepository.class);
         accountService = mock(AccountService.class);
+        transferService = mock(TransferService.class);
 
         klikService = new KlikService(
                 klikClient,
@@ -54,7 +60,8 @@ class KlikServiceTest {
                 accountRepository,
                 transactionRepository,
                 customerRepository,
-                accountService
+                accountService,
+                transferService
         );
     }
 
@@ -150,5 +157,75 @@ class KlikServiceTest {
         assertThat(klikTx.getStatus()).isEqualTo("REJECTED");
         assertThat(klikTx.getRejectReason()).isEqualTo("INSUFFICIENT_FUNDS");
         verify(klikClient).confirmPayment(transactionId.toString(), "REJECTED", "INSUFFICIENT_FUNDS");
+    }
+
+    @Test
+    void shouldRegisterAliasSuccessfully() {
+        UUID accountId = UUID.randomUUID();
+        String email = "hans@example.test";
+        String phone = "+48123456789";
+        Account account = mock(Account.class);
+        when(account.getAccountNumber()).thenReturn(AccountNumber.of("PL123"));
+        when(accountService.getAccountEntity(accountId, email)).thenReturn(account);
+
+        when(klikClient.registerAlias(phone, "PL123")).thenReturn(
+                new KlikClient.AliasRegisterResponse("alias-123", phone, "2026-06-18T13:00:00Z")
+        );
+
+        KlikClient.AliasRegisterResponse response = klikService.registerAlias(accountId, phone, email);
+
+        assertThat(response.phone()).isEqualTo(phone);
+        assertThat(response.aliasId()).isEqualTo("alias-123");
+        verify(klikClient).registerAlias(phone, "PL123");
+    }
+
+    @Test
+    void shouldDeleteAliasSuccessfully() {
+        String phone = "+48123456789";
+        String email = "hans@example.test";
+        Customer customer = mock(Customer.class);
+        when(customer.getEmail()).thenReturn(email);
+        Account account = mock(Account.class);
+        when(account.getCustomer()).thenReturn(customer);
+
+        when(klikClient.lookupAlias(phone)).thenReturn(
+                new KlikClient.AliasLookupResponse(phone, "bank-1", "code-1", new KlikClient.AccountIdentifier("iban", "PL123"))
+        );
+        when(accountRepository.findByAccountNumber_Value("PL123")).thenReturn(Optional.of(account));
+
+        klikService.deleteAlias(phone, email);
+
+        verify(klikClient).deleteAlias(phone);
+    }
+
+    @Test
+    void shouldExecuteP2pTransferSuccessfully() {
+        UUID fromAccountId = UUID.randomUUID();
+        String email = "hans@example.test";
+        String phone = "+48987654321";
+        BigDecimal amount = new BigDecimal("50.00");
+        BlikP2pTransferRequest request = new BlikP2pTransferRequest(fromAccountId, phone, amount, "EUR", "For lunch");
+
+        Account fromAccount = mock(Account.class);
+        when(accountService.getAccountEntity(fromAccountId, email)).thenReturn(fromAccount);
+
+        when(klikClient.lookupAlias(phone)).thenReturn(
+                new KlikClient.AliasLookupResponse(phone, "bank-2", "code-2", new KlikClient.AccountIdentifier("iban", "PL999"))
+        );
+        when(transferService.isAccountOurs("PL999")).thenReturn(false);
+
+        TransferResponse expectedResponse = mock(TransferResponse.class);
+        when(transferService.execute(any(), eq(email))).thenReturn(expectedResponse);
+
+        TransferResponse actualResponse = klikService.p2pTransfer(request, email);
+
+        assertThat(actualResponse).isEqualTo(expectedResponse);
+        verify(transferService).execute(argThat(tr -> 
+                tr.fromAccountId().equals(fromAccountId) &&
+                tr.toIban().equals("PL999") &&
+                tr.amount().equals(amount) &&
+                tr.channel() == TransferChannel.SEPA_INSTANT &&
+                tr.description().equals("For lunch")
+        ), eq(email));
     }
 }
