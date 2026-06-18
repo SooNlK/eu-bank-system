@@ -88,7 +88,7 @@ export default function Dashboard({ userEmail, onLogout }) {
         }
 
         if (activeNav === 'klik') {
-            return <KlikPanel />
+            return <KlikPanel userEmail={userEmail} />
         }
 
         if (TRANSFER_NAV_IDS.includes(activeNav)) {

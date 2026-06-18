@@ -22,7 +22,7 @@ function formatEur(amount, currency = 'EUR') {
     }).format(amount)
 }
 
-export default function KlikPanel() {
+export default function KlikPanel({ userEmail }) {
     const [accounts, setAccounts] = useState([])
     const [selectedAccount, setSelectedAccount] = useState('')
     const [activeTab, setActiveTab] = useState('c2b')
@@ -45,7 +45,8 @@ export default function KlikPanel() {
     const [regPhone, setRegPhone] = useState('')
     const [registeredAliases, setRegisteredAliases] = useState(() => {
         try {
-            return JSON.parse(localStorage.getItem('klik_registered_aliases') || '[]')
+            const storageKey = userEmail ? `klik_registered_aliases_${userEmail}` : 'klik_registered_aliases'
+            return JSON.parse(localStorage.getItem(storageKey) || '[]')
         } catch {
             return []
         }
@@ -69,8 +70,9 @@ export default function KlikPanel() {
     }, [])
 
     useEffect(() => {
-        localStorage.setItem('klik_registered_aliases', JSON.stringify(registeredAliases))
-    }, [registeredAliases])
+        const storageKey = userEmail ? `klik_registered_aliases_${userEmail}` : 'klik_registered_aliases'
+        localStorage.setItem(storageKey, JSON.stringify(registeredAliases))
+    }, [registeredAliases, userEmail])
 
     // Convert any phone number to E.164 format (+49XXXXXXXXXX for Germany/EU zone)
     function toE164(raw) {
