@@ -28,7 +28,7 @@ export default function DashboardPanel({ onNewTransfer, isJunior }) {
                     const mainAccountId = accs[0].id
                     setMainAccountId(mainAccountId)
                     const trans = await getAccountTransactions(mainAccountId)
-                    
+
                     // Filter transfers that are pending parent approval or rejected
                     const pendingOrRejectedTransfers = allTransfers.filter(
                         t => t.fromAccountId === mainAccountId && (t.status === 'PENDING_APPROVAL' || t.status === 'REJECTED')

@@ -149,7 +149,7 @@ public class AccountService {
                 account.getId(),
                 account.getAccountNumber().getValue(),
                 account.getType(),
-                account.getBalance().getAmount(),
+                account.getBalance().getAmount().subtract(account.getReservedBalance().getAmount()),
                 account.getReservedBalance().getAmount(),
                 account.getBalance().getCurrency(),
                 account.getStatus(),

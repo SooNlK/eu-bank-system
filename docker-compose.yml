@@ -72,12 +72,14 @@ services:
     depends_on:
       - backend
     networks:
-      - default
-      - cards-backend
+      default: {}
+      clearing-eu-a-karty:
+        aliases:
+          - euro-bank-a
 
 networks:
-  cards-backend:
-    name: cards-backend
+  clearing-eu-a-karty:
+    name: clearing-eu-a-karty
     external: true
   eu-payments-units_payment_network:
     external: true
