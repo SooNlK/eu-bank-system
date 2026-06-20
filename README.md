@@ -35,18 +35,18 @@ graph TD
 
     %% Przypadki Użycia
     subgraph System ["System Bankowy - Przypadki Użycia"]
-        UC_ManageAcc([Zarządzanie rachunkiem])
-        UC_MakeTransfer([Zlecenie przelewu])
-        UC_InternalTransfer([Przelew wewnętrzny])
-        UC_SepaTransfer([Przelew SEPA / TARGET2])
-        UC_SwiftTransfer([Przelew SWIFT])
-        UC_CardPay([Płatność kartą])
-        UC_Blik([Generowanie kodu BLIK])
+        UC_ManageAcc(["Zarządzanie rachunkiem"])
+        UC_MakeTransfer(["Zlecenie przelewu"])
+        UC_InternalTransfer(["Przelew wewnętrzny"])
+        UC_SepaTransfer(["Przelew SEPA / TARGET2"])
+        UC_SwiftTransfer(["Przelew SWIFT"])
+        UC_CardPay(["Płatność kartą"])
+        UC_Blik(["Generowanie kodu BLIK"])
         
         %% Przypadki Rodzica/Dziecka
-        UC_CreateJunior([Założenie konta Junior dla dziecka])
-        UC_ApproveTransfer([Autoryzacja przelewu Juniora])
-        UC_RequestJuniorTransfer([Zlecenie przelewu z konta Junior])
+        UC_CreateJunior(["Założenie konta Junior dla dziecka"])
+        UC_ApproveTransfer(["Autoryzacja przelewu Juniora"])
+        UC_RequestJuniorTransfer(["Zlecenie przelewu z konta Junior"])
         
         %% Relacje zawiera/rozszerza
         UC_MakeTransfer -.-> |include| UC_InternalTransfer
@@ -109,50 +109,50 @@ Poniższy diagram przedstawia pełny przepływ transakcji przelewu od momentu zl
 flowchart TD
     %% Definicja basenów za pomocą subgraphów
     subgraph Lane_Klient ["👤 Klient (Inicjator / Zlecający)"]
-        Start((Start)) --> ZleceniePrzelewu[Wprowadzenie danych przelewu]
+        Start(("Start")) --> ZleceniePrzelewu["Wprowadzenie danych przelewu"]
     end
 
     subgraph Lane_Backend ["💻 System Bankowy (Backend)"]
-        ZleceniePrzelewu --> WeryfikacjaKonta{Czy konto Junior?}
+        ZleceniePrzelewu --> WeryfikacjaKonta{"Czy konto Junior?"}
         
-        WeryfikacjaKonta -- Tak --> OczekiwanieZgody[Ustawienie statusu: PENDING_APPROVAL\ni requiresApproval = true]
-        WeryfikacjaKonta -- Nie --> SprawdzenieSalda{Czy saldo >= kwota?}
+        WeryfikacjaKonta -- Tak --> OczekiwanieZgody["Ustawienie statusu: PENDING_APPROVAL\ni requiresApproval = true"]
+        WeryfikacjaKonta -- Nie --> SprawdzenieSalda{"Czy saldo >= kwota?"}
         
-        OczekiwanieZgody --> PowiadomienieRodzica[Wysłanie powiadomienia do Rodzica]
+        OczekiwanieZgody --> PowiadomienieRodzica["Wysłanie powiadomienia do Rodzica"]
         
-        SprawdzenieSalda -- Nie --> OdrzucenieBrakSrodkow[Odrzucenie przelewu\nStatus: REJECTED] --> KoniecBlad((Koniec - Błąd))
-        SprawdzenieSalda -- Tak --> BlokadaSrodkow[Zablokowanie / Rezerwacja środków]
+        SprawdzenieSalda -- Nie --> OdrzucenieBrakSrodkow["Odrzucenie przelewu\nStatus: REJECTED"] --> KoniecBlad(("Koniec - Błąd"))
+        SprawdzenieSalda -- Tak --> BlokadaSrodkow["Zablokowanie / Rezerwacja środków"]
         
-        BlokadaSrodkow --> TypPrzelewu{Kanał płatności}
+        BlokadaSrodkow --> TypPrzelewu{"Kanał płatności"}
         
-        TypPrzelewu -- INTERNAL --> ProcesWewn[Księgowanie natychmiastowe]
-        TypPrzelewu -- SEPA / TARGET --> ProcesSepa[Generowanie ISO 20022 XML]
-        TypPrzelewu -- SWIFT --> ProcesSwift[FX + prowizja + pacs.008 XML]
+        TypPrzelewu -- INTERNAL --> ProcesWewn["Księgowanie natychmiastowe"]
+        TypPrzelewu -- "SEPA / TARGET" --> ProcesSepa["Generowanie ISO 20022 XML"]
+        TypPrzelewu -- SWIFT --> ProcesSwift["FX + prowizja + pacs.008 XML"]
     end
 
     subgraph Lane_Rodzic ["👤 Rodzic (Opiekun)"]
-        PowiadomienieRodzica --> PanelZatwierdzania[Przegląd w panelu Juniora]
-        PanelZatwierdzania --> DecyzjaRodzica{Zgoda rodzica?}
-        DecyzjaRodzica -- Nie --> OdrzucenieRodzica[Status: REJECTED]
+        PowiadomienieRodzica --> PanelZatwierdzania["Przegląd w panelu Juniora"]
+        PanelZatwierdzania --> DecyzjaRodzica{"Zgoda rodzica?"}
+        DecyzjaRodzica -- Nie --> OdrzucenieRodzica["Status: REJECTED"]
         DecyzjaRodzica -- Tak --> SprawdzenieSalda
     end
 
     subgraph Lane_Zewn ["🏦 Systemy Zewnętrzne / Symulatory"]
-        ProcesSepa --> SymulatorSepa[Rozliczenie sesyjne (Batch / Instant)]
-        ProcesSwift --> SymulatorSwift[Obsługa korespondentów i Nostro]
+        ProcesSepa --> SymulatorSepa["Rozliczenie sesyjne (Batch / Instant)"]
+        ProcesSwift --> SymulatorSwift["Obsługa korespondentów i Nostro"]
         
-        SymulatorSepa --> WebhookRozliczenia[Webhook: /api/v1/target-settlement]
-        SymulatorSwift --> WebhookSwift[Webhook: /api/v1/swift/receive]
+        SymulatorSepa --> WebhookRozliczenia["Webhook: /api/v1/target-settlement"]
+        SymulatorSwift --> WebhookSwift["Webhook: /api/v1/swift/receive"]
     end
 
     OdrzucenieRodzica --> KoniecBlad
-    ProcesWewn --> ZaksiegowanieOdbiorcy[Zaksięgowanie na koncie odbiorcy] --> KoniecSukces((Koniec - Sukces))
+    ProcesWewn --> ZaksiegowanieOdbiorcy["Zaksięgowanie na koncie odbiorcy"] --> KoniecSukces(("Koniec - Sukces"))
     
-    WebhookRozliczenia --> FinalizacjaRozliczenia{Rozliczenie udane?}
+    WebhookRozliczenia --> FinalizacjaRozliczenia{"Rozliczenie udane?"}
     WebhookSwift --> FinalizacjaRozliczenia
     
-    FinalizacjaRozliczenia -- Tak --> ZaksiegowanieZewn[Zmiana statusu na: COMPLETED / ACCEPTED] --> KoniecSukces
-    FinalizacjaRozliczenia -- Nie / Zwrot --> ZwrotSrodkow[Zwrot zarezerwowanych środków\nStatus: REJECTED / RECALLED] --> KoniecBlad
+    FinalizacjaRozliczenia -- Tak --> ZaksiegowanieZewn["Zmiana statusu na: COMPLETED / ACCEPTED"] --> KoniecSukces
+    FinalizacjaRozliczenia -- Nie / Zwrot --> ZwrotSrodkow["Zwrot zarezerwowanych środków\nStatus: REJECTED / RECALLED"] --> KoniecBlad
 ```
 
 ---
