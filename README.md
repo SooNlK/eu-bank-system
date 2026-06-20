@@ -11,63 +11,193 @@ Projekt systemu bankowego w strefie euro obsługującego konta osobiste, konta d
 | **Baza danych** | PostgreSQL 16 + Flyway (migracje schematów od V1 do V19)            |
 | **Infrastruktura** | Docker + Docker Compose                                             |
 
----
-
 ## Zakres Funkcjonalności
 
-### 1. Konta STANDARD oraz JUNIOR (Rodzic-Dziecko)
-System wspiera dwa rodzaje rachunków w klasie [AccountType](file:///Users/krzysztof/Desktop/eu-bank-system/backend/src/main/java/com/bank/domain/account/AccountType.java):
-*   **STANDARD**: Klasyczne konto bankowe dla dorosłego klienta.
-*   **JUNIOR**: Konto dedykowane dla dzieci w wieku 7-13 lat. Zakładane jest wyłącznie przez zalogowanego rodzica za pośrednictwem endpointu w [AccountController.java](file:///Users/krzysztof/Desktop/eu-bank-system/backend/src/main/java/com/bank/api/AccountController.java).
+System bankowy realizuje szereg kluczowych procesów biznesowych związanych z obsługą klientów detalicznych, operacjami na rachunkach oraz integracją z zewnętrznymi systemami płatności i sieciami kartowymi.
 
-#### Przepływ zatwierdzania (Parent Approval Flow):
-Wszystkie przelewy zlecane z konta typu **JUNIOR** (wewnętrzne oraz zewnętrzne) wymagają zgody rodzica lub uprawnionego opiekuna.
-*   Przelew taki trafia do bazy ze statusem `PENDING_APPROVAL` oraz `requiresApproval = true`.
-*   Rodzic widzi oczekujące przelewy na dedykowanym panelu Juniora (endpoint `GET /api/transfers/pending-approval`).
-*   Zatwierdzenie (`POST /api/transfers/{id}/approve`) lub odrzucenie (`POST /api/transfers/{id}/reject`) realizowane jest w [TransferService.java](file:///Users/krzysztof/Desktop/eu-bank-system/backend/src/main/java/com/bank/service/TransferService.java) i natychmiastowo procesuje lub anuluje środki.
+### Diagram Przypadków Użycia (Use Case Diagram)
+
+Poniższy diagram przedstawia główne przypadki użycia systemu w podziale na role (Rodzic, Dziecko, Klient Standardowy) oraz interakcje z systemami zewnętrznymi:
+
+```mermaid
+graph TD
+    %% Aktorzy
+    Klient["👤 Klient (Standard)"]
+    Rodzic["👤 Rodzic"]
+    Dziecko["👤 Dziecko (Junior)"]
+    SystemBankowy["💻 System Bankowy (Backend)"]
+    SystemyZewn["🏦 Systemy Zewnętrzne (SEPA/TARGET/SWIFT)"]
+    SiecKart["💳 Sieć Kart Płatniczych"]
+
+    %% Relacje dziedziczenia aktorów
+    Rodzic --> Klient
+    Dziecko --> Klient
+
+    %% Przypadki Użycia
+    subgraph System ["System Bankowy - Przypadki Użycia"]
+        UC_ManageAcc([Zarządzanie rachunkiem])
+        UC_MakeTransfer([Zlecenie przelewu])
+        UC_InternalTransfer([Przelew wewnętrzny])
+        UC_SepaTransfer([Przelew SEPA / TARGET2])
+        UC_SwiftTransfer([Przelew SWIFT])
+        UC_CardPay([Płatność kartą])
+        UC_Blik([Generowanie kodu BLIK])
+        
+        %% Przypadki Rodzica/Dziecka
+        UC_CreateJunior([Założenie konta Junior dla dziecka])
+        UC_ApproveTransfer([Autoryzacja przelewu Juniora])
+        UC_RequestJuniorTransfer([Zlecenie przelewu z konta Junior])
+        
+        %% Relacje zawiera/rozszerza
+        UC_MakeTransfer -.-> |include| UC_InternalTransfer
+        UC_MakeTransfer -.-> |include| UC_SepaTransfer
+        UC_MakeTransfer -.-> |include| UC_SwiftTransfer
+        UC_RequestJuniorTransfer -.-> |include| UC_MakeTransfer
+    end
+
+    %% Połączenia aktorów z przypadkami
+    Klient --> UC_ManageAcc
+    Klient --> UC_MakeTransfer
+    Klient --> UC_Blik
+    
+    Rodzic --> UC_CreateJunior
+    Rodzic --> UC_ApproveTransfer
+    
+    Dziecko --> UC_RequestJuniorTransfer
+    
+    %% Powiązania systemów zewnętrznych
+    UC_SepaTransfer --- SystemyZewn
+    UC_SwiftTransfer --- SystemyZewn
+    SiecKart --- UC_CardPay
+    UC_CardPay --- SystemBankowy
+```
 
 ---
 
-### 2. Przelew Wewnętrzny i Zewnętrzny (SEPA & TARGET2)
+### 1. Zarządzanie Kontami: STANDARD oraz JUNIOR (Rodzic-Dziecko)
+
+System obsługuje dwa typy rachunków zdefiniowane w klasie [AccountType](file:///Users/krzysztof/Desktop/eu-bank-system/backend/src/main/java/com/bank/domain/account/AccountType.java):
+*   **STANDARD**: Domyślne konto oszczędnościowo-rozliczeniowe dla dorosłego klienta.
+*   **JUNIOR**: Konto przeznaczone dla dzieci w wieku 7-13 lat. Zakładane i zarządzane jest wyłącznie przez zalogowanego Rodzica (opiekuna) za pośrednictwem endpointów w [AccountController.java](file:///Users/krzysztof/Desktop/eu-bank-system/backend/src/main/java/com/bank/api/AccountController.java).
+
+> [!IMPORTANT]
+> **Mechanizm zatwierdzania przelewów (Parent Approval Flow):**
+> Wszystkie przelewy zlecane z konta typu **JUNIOR** (zarówno wewnętrzne, jak i zewnętrzne) wymagają zgody rodzica:
+> 1. Inicjowany przelew otrzymuje status `PENDING_APPROVAL` oraz flagę `requiresApproval = true`.
+> 2. Rodzic ma wgląd w oczekujące przelewy na dedykowanym panelu zarządzania kontem Juniora (`GET /api/transfers/pending-approval`).
+> 3. Rodzic podejmuje decyzję o zatwierdzeniu (`POST /api/transfers/{id}/approve`) lub odrzuceniu (`POST /api/transfers/{id}/reject`) przelewu w [TransferService.java](file:///Users/krzysztof/Desktop/eu-bank-system/backend/src/main/java/com/bank/service/TransferService.java).
+> 4. Zatwierdzenie powoduje natychmiastowe zablokowanie i zaksięgowanie/wysłanie środków. Odrzucenie anuluje transakcję.
+
+---
+
+### 2. Przelewy Krajowe i Europejskie (INTERNAL, SEPA & TARGET2)
+
 Obsługiwane są kanały płatności zdefiniowane w [TransferChannel](file:///Users/krzysztof/Desktop/eu-bank-system/backend/src/main/java/com/bank/domain/transfer/TransferChannel.java):
-*   `INTERNAL`: Szybki przelew bezprowizyjny pomiędzy rachunkami w tym samym banku.
-*   `SEPA` (SEPA Credit Transfer): Przelew zewnętrzny rozliczany sesyjnie (Batch). Transakcje są wysyłane jako komunikaty ISO 20022 XML do klienta sesyjnego i oznaczane jako `COMPLETED` po rozliczeniu sesji.
-*   `SEPA_INSTANT`: Przelew natychmiastowy do limitu 100 000 EUR na pojedynczą transakcję.
+*   `INTERNAL`: Bezpłatne i natychmiastowe rozliczenia wewnątrzbankowe pomiędzy rachunkami prowadzonymi w tym samym systemie.
+*   `SEPA` (SEPA Credit Transfer): Przelewy zewnętrzne rozliczane w trybie sesyjnym (Batch). Paczki przelewów są generowane w formacie ISO 20022 XML i przesyłane do zewnętrznego symulatora rozliczeniowego.
+*   `SEPA_INSTANT`: Przelewy natychmiastowe strefy euro realizowane w czasie rzeczywistym (do limitu 100 000 EUR na transakcję).
 *   `TARGET` (TARGET2): Rozliczenia brutto w czasie rzeczywistym (RTGS) dla dużych kwot w strefie euro, wymagające podania kodu BIC banku odbiorcy.
 
-#### Integracja Webhooków SEPA/TARGET:
-Backend udostępnia kontroler [TargetWebhookController.java](file:///Users/krzysztof/Desktop/eu-bank-system/backend/src/main/java/com/bank/api/TargetWebhookController.java) (`POST /api/v1/target-settlement`) do przyjmowania powiadomień rozliczeniowych i uznawania rachunków dla przelewów przychodzących z symulatora płatniczego.
+#### Asynchroniczne Rozliczanie i Webhooki:
+Backend udostępnia endpoint webhooka w [TargetWebhookController.java](file:///Users/krzysztof/Desktop/eu-bank-system/backend/src/main/java/com/bank/api/TargetWebhookController.java) (`POST /api/v1/target-settlement`). Służy on do przyjmowania asynchronicznych powiadomień z symulatora płatniczego o statusie realizacji przelewów wychodzących oraz do procesowania przelewów przychodzących z innych banków.
+
+#### Diagram BPMN dla Procesu Przelewu
+
+Poniższy diagram przedstawia pełny przepływ transakcji przelewu od momentu zlecenia przez klienta, przez weryfikację konta Junior i autoryzację rodzica, aż po rozliczenie zewnętrzne z użyciem webhooków:
+
+```mermaid
+flowchart TD
+    %% Definicja basenów za pomocą subgraphów
+    subgraph Lane_Klient ["👤 Klient (Inicjator / Zlecający)"]
+        Start((Start)) --> ZleceniePrzelewu[Wprowadzenie danych przelewu]
+    end
+
+    subgraph Lane_Backend ["💻 System Bankowy (Backend)"]
+        ZleceniePrzelewu --> WeryfikacjaKonta{Czy konto Junior?}
+        
+        WeryfikacjaKonta -- Tak --> OczekiwanieZgody[Ustawienie statusu: PENDING_APPROVAL\ni requiresApproval = true]
+        WeryfikacjaKonta -- Nie --> SprawdzenieSalda{Czy saldo >= kwota?}
+        
+        OczekiwanieZgody --> PowiadomienieRodzica[Wysłanie powiadomienia do Rodzica]
+        
+        SprawdzenieSalda -- Nie --> OdrzucenieBrakSrodkow[Odrzucenie przelewu\nStatus: REJECTED] --> KoniecBlad((Koniec - Błąd))
+        SprawdzenieSalda -- Tak --> BlokadaSrodkow[Zablokowanie / Rezerwacja środków]
+        
+        BlokadaSrodkow --> TypPrzelewu{Kanał płatności}
+        
+        TypPrzelewu -- INTERNAL --> ProcesWewn[Księgowanie natychmiastowe]
+        TypPrzelewu -- SEPA / TARGET --> ProcesSepa[Generowanie ISO 20022 XML]
+        TypPrzelewu -- SWIFT --> ProcesSwift[FX + prowizja + pacs.008 XML]
+    end
+
+    subgraph Lane_Rodzic ["👤 Rodzic (Opiekun)"]
+        PowiadomienieRodzica --> PanelZatwierdzania[Przegląd w panelu Juniora]
+        PanelZatwierdzania --> DecyzjaRodzica{Zgoda rodzica?}
+        DecyzjaRodzica -- Nie --> OdrzucenieRodzica[Status: REJECTED]
+        DecyzjaRodzica -- Tak --> SprawdzenieSalda
+    end
+
+    subgraph Lane_Zewn ["🏦 Systemy Zewnętrzne / Symulatory"]
+        ProcesSepa --> SymulatorSepa[Rozliczenie sesyjne (Batch / Instant)]
+        ProcesSwift --> SymulatorSwift[Obsługa korespondentów i Nostro]
+        
+        SymulatorSepa --> WebhookRozliczenia[Webhook: /api/v1/target-settlement]
+        SymulatorSwift --> WebhookSwift[Webhook: /api/v1/swift/receive]
+    end
+
+    OdrzucenieRodzica --> KoniecBlad
+    ProcesWewn --> ZaksiegowanieOdbiorcy[Zaksięgowanie na koncie odbiorcy] --> KoniecSukces((Koniec - Sukces))
+    
+    WebhookRozliczenia --> FinalizacjaRozliczenia{Rozliczenie udane?}
+    WebhookSwift --> FinalizacjaRozliczenia
+    
+    FinalizacjaRozliczenia -- Tak --> ZaksiegowanieZewn[Zmiana statusu na: COMPLETED / ACCEPTED] --> KoniecSukces
+    FinalizacjaRozliczenia -- Nie / Zwrot --> ZwrotSrodkow[Zwrot zarezerwowanych środków\nStatus: REJECTED / RECALLED] --> KoniecBlad
+```
 
 ---
 
 ### 3. Integracja z Siecią SWIFT (Przelew Międzynarodowy)
-Obsługuje transgraniczne i wielowalutowe przelewy międzynarodowe w kanale `SWIFT`. Integracja łączy się z zewnętrznym symulatorem sieci SWIFT (`Jkwasnyy/SWIFT-Aplikacje-Biznesowe`) pod adresem `SWIFT_URL`.
 
-#### Kluczowe elementy logiki SWIFT:
-1.  **Format wiadomości**: Wymiana danych odbywa się za pomocą standardowych komunikatów XML **pacs.008** (FIToFICustomerCreditTransfer) generowanych przez [Pacs008Builder.java](file:///Users/krzysztof/Desktop/eu-bank-system/backend/src/main/java/com/bank/client/swift/Pacs008Builder.java) oraz parsowanych przez [Pacs008Parser.java](file:///Users/krzysztof/Desktop/eu-bank-system/backend/src/main/java/com/bank/client/swift/Pacs008Parser.java).
-2.  **Obsługa walut i FX**: Wspierane waluty docelowe to: `EUR`, `USD`, `GBP`, `PLN`, `CHF`. Konwersje walutowe są realizowane na bazie kursów zapisanych w tabeli `FX_RATES` poprzez [FxService.java](file:///Users/krzysztof/Desktop/eu-bank-system/backend/src/main/java/com/bank/service/FxService.java).
-3.  **Opłaty SWIFT**: Za przelew pobierana jest prowizja zdefiniowana w konfiguracji (domyślnie 1% kwoty przelewu, pobierane z konta nadawcy przy podziale kosztów `SHAR` lub `DEBT`).
-4.  **Rachunki korespondenckie (Nostro)**: Wypływ środków w obcej walucie jest automatycznie rozliczany na odpowiednim koncie Nostro naszego banku (tabela `CORRESPONDENT_ACCOUNTS`) u pierwszego korespondenta na trasie płatności.
-5.  **Obsługa wiadomości przychodzących**: [SwiftWebhookController.java](file:///Users/krzysztof/Desktop/eu-bank-system/backend/src/main/java/com/bank/api/SwiftWebhookController.java) (`/receive` oraz `/api/v1/swift/receive`) odbiera przelewy przychodzące:
-    *   Jeśli rachunek odbiorcy jest aktywny, środki są przeliczane i księgowane (status `ACCEPTED`).
-    *   Jeśli konto jest zamknięte lub nie istnieje, wysyłany jest automatyczny zwrot (**Recall**) do banku nadawcy, a żądanie kończy się statusem `REJECTED`.
+System obsługuje wielowalutowe przelewy międzynarodowe i transgraniczne w kanale `SWIFT` poprzez integrację z symulatorem sieci SWIFT (`Jkwasnyy/SWIFT-Aplikacje-Biznesowe`).
 
----
-
-### 4. Integracja z Modułem Kart Płatniczych
-Backend banku integruje się z zewnętrzną siecią kartową (`FilipSl3/Karty-Platnicze-Aplikacje-Biznesowe`) jako bank-wydawca (Issuer).
-
-*   Komunikacja REST z gatewayem sieci kart pod adresem zdefiniowanym w `CARD_NETWORK_BASE_URL`.
-*   Bank zapisuje lokalnie wyłącznie bezpieczne, zamaskowane dane karty (token zewnętrzny, status, 4 ostatnie cyfry, datę ważności, limity dzienne/miesięczne). Pełny PAN i CVV są zwracane tylko raz w odpowiedzi na endpoint wydania karty.
-*   Udostępniane są callbacki autoryzacyjne w [CardIssuerController.java](file:///Users/krzysztof/Desktop/eu-bank-system/backend/src/main/java/com/bank/api/CardIssuerController.java):
-    *   `POST /api/v1/authorize` – blokada środków na koncie w odpowiedzi na próbę płatności kartą.
-    *   `POST /api/v1/capture` – ostateczne rozliczenie i ściągnięcie zablokowanych środków.
-    *   `POST /api/v1/refund` – zwrot transakcji na rachunek karty.
+#### Architektura i Przepływ Logiczny SWIFT:
+1.  **Format wiadomości (ISO 20022 pacs.008)**:
+    Transakcje SWIFT są przesyłane w standardzie komunikatów XML **pacs.008** (Customer Credit Transfer). Za budowanie paczek XML odpowiada [Pacs008Builder.java](file:///Users/krzysztof/Desktop/eu-bank-system/backend/src/main/java/com/bank/client/swift/Pacs008Builder.java), a za ich przetwarzanie [Pacs008Parser.java](file:///Users/krzysztof/Desktop/eu-bank-system/backend/src/main/java/com/bank/client/swift/Pacs008Parser.java).
+2.  **Obsługa Walut i Tabele FX**:
+    Wspierane są waluty: `EUR`, `USD`, `GBP`, `PLN`, `CHF`. Konwersje walutowe i wyliczanie kwot transakcji odbywają się na podstawie aktualnych kursów w tabeli `FX_RATES` przez [FxService.java](file:///Users/krzysztof/Desktop/eu-bank-system/backend/src/main/java/com/bank/service/FxService.java).
+3.  **Konta Nostro (Korespondenckie)**:
+    Środki wychodzące w obcej walucie są rozliczane na dedykowanych kontach Nostro u partnerów korespondencyjnych (tabela `CORRESPONDENT_ACCOUNTS`).
+4.  **Koszty Przelewu**:
+    Zgodnie ze standardami pobierana jest prowizja konfigurowalna w parametrze `SWIFT_FEE_PERCENT` (domyślnie 1%) z podziałem kosztów (np. `SHAR`, `DEBT`).
+5.  **Obsługa Przelewów Przychodzących i Odwołań (Recall)**:
+    Endpoint `/api/v1/swift/receive` w [SwiftWebhookController.java](file:///Users/krzysztof/Desktop/eu-bank-system/backend/src/main/java/com/bank/api/SwiftWebhookController.java) odbiera przelewy przychodzące z sieci SWIFT:
+    *   **Zatwierdzenie**: Środki są przeliczane po kursie FX i księgowane na rachunku odbiorcy (status `ACCEPTED`).
+    *   **Zwrot (Recall)**: Jeżeli konto odbiorcy nie istnieje lub jest nieaktywne, system generuje automatyczny komunikat zwrotny (Recall) i odrzuca transakcję.
 
 ---
 
-### 5. Płatności BLIK (API)
-System posiada zdefiniowaną strukturę danych oraz endpointy w [BlikController.java](file:///Users/krzysztof/Desktop/eu-bank-system/backend/src/main/java/com/bank/api/BlikController.java) do generowania 6-cyfrowych kodów BLIK ważnych przez 120 sekund.
+### 4. Obsługa Kart Płatniczych (System Wydawniczy / Issuer)
+
+Backend banku działa jako Issuer (Wydawca) zintegrowany z symulatorem sieci kart płatniczych (`FilipSl3/Karty-Platnicze-Aplikacje-Biznesowe`).
+
+*   **Bezpieczeństwo Danych (PCI DSS)**:
+    Pełny numer karty (PAN) oraz CVV są zwracane użytkownikowi wyłącznie raz podczas rejestracji karty. W bazie danych zapisywane są tylko bezpieczne dane: zamaskowany numer (ostatnie 4 cyfry), token karty, limity dzienne/miesięczne oraz status (tabela `CARDS`).
+*   **Wydawanie i Limity**:
+    Karty są przypisane do rachunków i posiadają definiowane limity kwotowe transakcji.
+*   **Proces Autoryzacji Płatności**:
+    [CardIssuerController.java](file:///Users/krzysztof/Desktop/eu-bank-system/backend/src/main/java/com/bank/api/CardIssuerController.java) obsługuje żądania z sieci kartowej:
+    *   `POST /api/v1/authorize`: Sprawdzenie limitów i blokada środków na koncie klienta (`reserved_balance`).
+    *   `POST /api/v1/capture`: Rozliczenie zablokowanej kwoty i ostateczne obciążenie rachunku.
+    *   `POST /api/v1/refund`: Zwrot środków na rachunek karty.
+
+---
+
+### 5. Płatności BLIK
+
+Wygodne płatności mobilne zintegrowane w [BlikController.java](file:///Users/krzysztof/Desktop/eu-bank-system/backend/src/main/java/com/bank/api/BlikController.java):
+*   Generowanie 6-cyfrowego kodu BLIK zapisanego w postaci skrótu (hash) w tabeli `BLIK_CODES`.
+*   Kod zachowuje ważność przez 120 sekund i może być użyty jednorazowo.
 
 ---
 
@@ -209,27 +339,26 @@ cp .env.example .env
 
 Główne parametry konfiguracyjne:
 
-| Zmienna | Domyślna Wartość                   | Opis |
-| :--- |:-----------------------------------| :--- |
-| **POSTGRES_DB** | `bankdb`                           | Nazwa bazy danych PostgreSQL. |
-| **POSTGRES_USER** | `admin`                            | Użytkownik bazy danych. |
-| **POSTGRES_PASSWORD** | `secret`                           | Hasło użytkownika bazy danych. |
-| **DB_HOST_PORT** | `5433`                             | Port PostgreSQL na maszynie hosta. |
-| **BACKEND_PORT** | `8090`                             | Port, na którym nasłuchuje API backendu. |
-| **FRONTEND_PORT** | `3010`                             | Port, na którym dostępna jest aplikacja webowa. |
+| Zmienna | Domyślna Wartość | Opis |
+| :--- | :--- | :--- |
+| **POSTGRES_DB** | `bankdb` | Nazwa bazy danych PostgreSQL. |
+| **POSTGRES_USER** | `admin` | Użytkownik bazy danych. |
+| **POSTGRES_PASSWORD** | `secret` | Hasło użytkownika bazy danych. |
+| **DB_HOST_PORT** | `5433` | Port PostgreSQL na maszynie hosta. |
+| **BACKEND_PORT** | `8090` | Port, na którym nasłuchuje API backendu. |
+| **FRONTEND_PORT** | `3010` | Port, na którym dostępna jest aplikacja webowa. |
 | **CARD_NETWORK_BASE_URL** | `http://host.docker.internal:8072` | Adres URL zewnętrznej sieci kartowej. |
-| **CARD_NETWORK_API_KEY** | `bank-key-eu-a`                    | Klucz API do autoryzacji w sieci kartowej. |
-| **CARD_NETWORK_HMAC_SECRET**| `secret-eu-a-hmac`                 | Klucz HMAC do weryfikacji podpisów żądań. |
+| **CARD_NETWORK_API_KEY** | `bank-key-eu-a` | Klucz API do autoryzacji w sieci kartowej. |
+| **CARD_NETWORK_HMAC_SECRET**| `secret-eu-a-hmac` | Klucz HMAC do weryfikacji podpisów żądań. |
 | **TARGET_URL** | `http://host.docker.internal:8001` | Adres URL symulatora TARGET2. |
 | **SEPA_BATCH_URL** | `http://host.docker.internal:8002` | Adres URL symulatora SEPA Batch. |
 | **SEPA_INSTANT_URL** | `http://host.docker.internal:8003` | Adres URL symulatora SEPA Instant. |
 | **SWIFT_URL** | `http://host.docker.internal:3000` | Adres URL zewnętrznego symulatora SWIFT. |
-| **SWIFT_CLIENT_ID** | `test-client`                      | Identyfikator klienta do autoryzacji SWIFT. |
-| **SWIFT_CLIENT_SECRET** | `test-secret`                      | Sekret autoryzacyjny do symulatora SWIFT. |
-| **SWIFT_BANK_BIC** | `BANKDEXX`                         | Kod BIC naszego banku w sieci SWIFT. |
-| **SWIFT_ENABLED** | `true`                             | Flaga włączająca/wyłączająca moduł SWIFT. |
-| **SWIFT_FEE_PERCENT** | `0.01`                             | Procent pobieranej prowizji SWIFT (0.01 = 1%). |
-
+| **SWIFT_CLIENT_ID** | `test-client` | Identyfikator klienta do autoryzacji SWIFT. |
+| **SWIFT_CLIENT_SECRET** | `test-secret` | Sekret autoryzacyjny do symulatora SWIFT. |
+| **SWIFT_BANK_BIC** | `BANKDEXX` | Kod BIC naszego banku w sieci SWIFT. |
+| **SWIFT_ENABLED** | `true` | Flaga włączająca/wyłączająca moduł SWIFT. |
+| **SWIFT_FEE_PERCENT** | `0.01` | Procent pobieranej prowizji SWIFT (0.01 = 1%). |
 
 ---
 
@@ -266,10 +395,10 @@ Do testów przelewów zagranicznych SWIFT wymagane jest uruchomienie symulatora 
     docker compose up -d --build
     ```
 3.  Aplikacja bankowa jest dostępna pod adresami:
-    *   **Panel Klienta (Frontend)**: [http://localhost:3010](http://localhost:3000) (lub port ustawiony w `FRONTEND_PORT`)
-    *   **API (Backend)**: [http://localhost:8090](http://localhost:8080)
+    *   **Panel Klienta (Frontend)**: [http://localhost:3010](http://localhost:3010) (lub port ustawiony w `FRONTEND_PORT`)
+    *   **API (Backend)**: [http://localhost:8090](http://localhost:8090)
     *   **Baza Danych**: Port `5433` (lub port ustawiony w `DB_HOST_PORT`)
-    *   **Swagger UI**: [http://localhost:8090/swagger-ui.html](http://localhost:8080/swagger-ui.html)
+    *   **Swagger UI**: [http://localhost:8090/swagger-ui.html](http://localhost:8090/swagger-ui.html)
 
 ---
 
