@@ -23,9 +23,11 @@ public class SwiftWebhookController {
     private static final Logger log = LoggerFactory.getLogger(SwiftWebhookController.class);
 
     private final SwiftIncomingService swiftIncomingService;
+    private final com.bank.config.SwiftProperties swiftProperties;
 
-    public SwiftWebhookController(SwiftIncomingService swiftIncomingService) {
+    public SwiftWebhookController(SwiftIncomingService swiftIncomingService, com.bank.config.SwiftProperties swiftProperties) {
         this.swiftIncomingService = swiftIncomingService;
+        this.swiftProperties = swiftProperties;
     }
 
     /**
@@ -98,6 +100,6 @@ public class SwiftWebhookController {
     @Operation(summary = "Health check SWIFT", 
             description = "Sprawdza status integracji SWIFT dla symulatora.")
     public ResponseEntity<String> healthCheck() {
-        return ResponseEntity.ok("{\"status\":\"UP\",\"bank\":\"BANKDEXX\"}");
+        return ResponseEntity.ok("{\"status\":\"UP\",\"bank\":\"" + swiftProperties.bankBic() + "\"}");
     }
 }

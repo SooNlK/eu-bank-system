@@ -2,6 +2,7 @@ package com.bank.dto.transfer;
 
 import com.bank.domain.transfer.TransferChannel;
 import com.bank.domain.transfer.TransferStatus;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
@@ -27,12 +28,13 @@ public record TransferResponse(
         @Schema(description = "Data zlecenia") LocalDateTime createdAt,
         @Schema(description = "Data realizacji") LocalDateTime completedAt,
         // Pola SWIFT (null dla innych kanałów)
-        @Schema(description = "ID wiadomości SWIFT (pacs.008)") String swiftMsgId,
-        @Schema(description = "UETR – end-to-end tracking") String swiftUetr,
-        @Schema(description = "Trasa SWIFT") String swiftRoute,
-        @Schema(description = "Opłata SWIFT (EUR)") BigDecimal swiftFee,
-        @Schema(description = "Kurs wymiany EUR → waluta docelowa") BigDecimal swiftFxRate,
-        @Schema(description = "Waluta docelowa SWIFT") String swiftTargetCurrency,
-        @Schema(description = "Podział opłat (SHA/OUR/BEN)") String swiftChargeBearer
+        @Schema(description = "ID wiadomości SWIFT (pacs.008)") @JsonProperty("swift_msg_id") String swiftMsgId,
+        @Schema(description = "UETR – end-to-end tracking") @JsonProperty("swift_uetr") String swiftUetr,
+        @Schema(description = "Trasa SWIFT") @JsonProperty("swift_route") String swiftRoute,
+        @Schema(description = "Opłata SWIFT (EUR)") @JsonProperty("swift_fee") BigDecimal swiftFee,
+        @Schema(description = "Kurs wymiany EUR → waluta docelowa") @JsonProperty("swift_fx_rate") BigDecimal swiftFxRate,
+        @Schema(description = "Waluta docelowa SWIFT") @JsonProperty("swift_target_currency") String swiftTargetCurrency,
+        @Schema(description = "Podział opłat (SHA/OUR/BEN)") @JsonProperty("swift_charge_bearer") String swiftChargeBearer
 ) {}
+
 

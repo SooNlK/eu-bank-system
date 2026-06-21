@@ -144,6 +144,37 @@ export default function TransferPanel({ onClose, initialType = 'sepa', onDashboa
         loadAccounts()
     }, [])
 
+    useEffect(() => {
+        if (selected === 'swift') {
+            const normalized = (form.iban || '').trim().toUpperCase()
+            if (normalized.startsWith('PL')) {
+                setForm((f) => ({ ...f, swiftTargetCurrency: 'PLN' }))
+            } else if (normalized.startsWith('GB')) {
+                setForm((f) => ({ ...f, swiftTargetCurrency: 'GBP' }))
+            } else if (normalized.startsWith('US')) {
+                setForm((f) => ({ ...f, swiftTargetCurrency: 'USD' }))
+            }
+        }
+    }, [selected])
+
+    const handleIbanChange = (e) => {
+        const val = e.target.value
+        setForm((f) => {
+            const updated = { ...f, iban: val }
+            if (selected === 'swift') {
+                const normalized = val.trim().toUpperCase()
+                if (normalized.startsWith('PL')) {
+                    updated.swiftTargetCurrency = 'PLN'
+                } else if (normalized.startsWith('GB')) {
+                    updated.swiftTargetCurrency = 'GBP'
+                } else if (normalized.startsWith('US')) {
+                    updated.swiftTargetCurrency = 'USD'
+                }
+            }
+            return updated
+        })
+    }
+
     const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
 
     const fromAccount = accounts.find((a) => a.id === fromId)
@@ -195,10 +226,10 @@ export default function TransferPanel({ onClose, initialType = 'sepa', onDashboa
                 channel: result.channel,
                 externalRef: result.id,
                 // SWIFT-specific fields
-                swift_route: result.swift_route ?? null,
-                swift_fee: result.swift_fee ?? null,
-                swift_fx_rate: result.swift_fx_rate ?? null,
-                swift_target_currency: result.swift_target_currency ?? null,
+                swift_route: result.swift_route ?? result.swiftRoute ?? null,
+                swift_fee: result.swift_fee ?? result.swiftFee ?? null,
+                swift_fx_rate: result.swift_fx_rate ?? result.swiftFxRate ?? null,
+                swift_target_currency: result.swift_target_currency ?? result.swiftTargetCurrency ?? null,
             })
 
             // Odśwież saldo lokalnie (backend już je zaktualizował)
@@ -404,7 +435,7 @@ export default function TransferPanel({ onClose, initialType = 'sepa', onDashboa
                             <input
                                 type="text"
                                 value={form.iban}
-                                onChange={set('iban')}
+                                onChange={handleIbanChange}
                                 className={inputClass}
                                 autoComplete="off"
                                 // For SWIFT, IBAN validation is relaxed – no pattern required

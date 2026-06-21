@@ -2,6 +2,7 @@ package com.bank.client.swift;
 
 import com.bank.config.SwiftProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,12 +46,14 @@ public class SwiftClient {
 
     // ===== Response DTOs =====
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public record SwiftTokenResponse(
             @JsonProperty("access_token") String accessToken,
             @JsonProperty("token_type")   String tokenType,
             @JsonProperty("expires_in")   int expiresIn
     ) {}
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public record SwiftPaymentResponse(
             @JsonProperty("message_id")        String messageId,
             @JsonProperty("status")            String status,        // ACCEPTED / REJECTED / PENDING
@@ -85,7 +88,7 @@ public class SwiftClient {
         String url = props.url() + "/swift/message";
         HttpHeaders headers = new HttpHeaders();
         headers.set("Authorization", "Bearer " + token);
-        headers.setContentType(MediaType.APPLICATION_XML);
+        headers.setContentType(new MediaType("application", "xml", java.nio.charset.StandardCharsets.UTF_8));
 
         HttpEntity<String> request = new HttpEntity<>(pacs008Xml, headers);
 
@@ -101,6 +104,13 @@ public class SwiftClient {
                 return null;
             }
         } catch (Exception e) {
+            if (e instanceof org.springframework.web.client.HttpStatusCodeException se && se.getStatusCode().value() == 401) {
+                log.warn("SWIFT token wygasł lub jest niepoprawny (401). Czyszczę pamięć podręczną.");
+                synchronized (this) {
+                    cachedToken = null;
+                    tokenExpiry = Instant.MIN;
+                }
+            }
             log.error("Błąd komunikacji ze symulatorem SWIFT: {}", e.getMessage(), e);
             return null;
         }
@@ -124,7 +134,7 @@ public class SwiftClient {
         String url = props.url() + "/api/bank/return";
         HttpHeaders headers = new HttpHeaders();
         headers.set("Authorization", "Bearer " + token);
-        headers.setContentType(MediaType.APPLICATION_XML);
+        headers.setContentType(new MediaType("application", "xml", java.nio.charset.StandardCharsets.UTF_8));
         headers.set("X-SWIFT-Message-Type", "RETURN");
 
         HttpEntity<String> request = new HttpEntity<>(recallXml, headers);
@@ -141,6 +151,13 @@ public class SwiftClient {
                 return false;
             }
         } catch (Exception e) {
+            if (e instanceof org.springframework.web.client.HttpStatusCodeException se && se.getStatusCode().value() == 401) {
+                log.warn("SWIFT token wygasł lub jest niepoprawny (401). Czyszczę pamięć podręczną.");
+                synchronized (this) {
+                    cachedToken = null;
+                    tokenExpiry = Instant.MIN;
+                }
+            }
             log.error("Błąd wysyłania zwrotu SWIFT: {}", e.getMessage(), e);
             return false;
         }

@@ -185,14 +185,21 @@ public class TransferService {
                 ? swiftResp.route().toString() : "[\"" + swiftProperties.bankBic() + "\",\"" + request.toBic() + "\"]"; 
         if (swiftResp != null && swiftResp.route() != null && swiftResp.route().size() > 1) {
             String firstCorrespondentBic = swiftResp.route().get(1);
-            correspondentAccountRepository
-                    .findByCorrespondentBicAndCurrencyAndStatus(firstCorrespondentBic, targetCurrency, "ACTIVE")
-                    .ifPresent(nostro -> {
-                        nostro.setBalance(nostro.getBalance().subtract(swiftAmount));
-                        correspondentAccountRepository.save(nostro);
-                        log.info("SWIFT nostro: obciążono konto {} ({}) kwotą {} {}",
-                                nostro.getAccountNumber(), firstCorrespondentBic, swiftAmount, targetCurrency);
-                    });
+            List<CorrespondentAccount> nostros = correspondentAccountRepository
+                    .findByCorrespondentBicAndStatus(firstCorrespondentBic, "ACTIVE");
+            if (!nostros.isEmpty()) {
+                CorrespondentAccount nostro = nostros.stream()
+                        .filter(n -> n.getCurrency().equalsIgnoreCase(targetCurrency))
+                        .findFirst()
+                        .orElse(nostros.get(0));
+                BigDecimal convertedAmount = fxService.convert(swiftAmount, targetCurrency, nostro.getCurrency());
+                nostro.setBalance(nostro.getBalance().subtract(convertedAmount));
+                correspondentAccountRepository.save(nostro);
+                log.info("SWIFT nostro: obciążono konto {} ({}) kwotą {} {} (po konwersji z {} {})",
+                        nostro.getAccountNumber(), firstCorrespondentBic, convertedAmount, nostro.getCurrency(), swiftAmount, targetCurrency);
+            } else {
+                log.warn("Brak aktywnego konta nostro dla korespondenta {}", firstCorrespondentBic);
+            }
         }
 
         // Zapis transakcji DEBIT

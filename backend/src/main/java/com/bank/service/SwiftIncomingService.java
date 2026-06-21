@@ -25,7 +25,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
+import com.bank.domain.swift.CorrespondentAccount;
 
 /**
  * Obsługa przychodzących wiadomości SWIFT od symulatora.
@@ -120,14 +122,21 @@ public class SwiftIncomingService {
             if (originalTransfer.getSwiftRoute() != null) {
                 String firstCorrespondentBic = getFirstCorrespondentFromRoute(originalTransfer.getSwiftRoute());
                 if (firstCorrespondentBic != null) {
-                    correspondentAccountRepository
-                            .findByCorrespondentBicAndCurrencyAndStatus(firstCorrespondentBic, targetCurrency, "ACTIVE")
-                            .ifPresent(nostro -> {
-                                nostro.setBalance(nostro.getBalance().add(targetAmount));
-                                correspondentAccountRepository.save(nostro);
-                                log.info("SWIFT Recall: zwrócono na konto Nostro {} ({}) kwotę {} {}",
-                                        nostro.getAccountNumber(), firstCorrespondentBic, targetAmount, targetCurrency);
-                            });
+                    List<CorrespondentAccount> nostros = correspondentAccountRepository
+                            .findByCorrespondentBicAndStatus(firstCorrespondentBic, "ACTIVE");
+                    if (!nostros.isEmpty()) {
+                        CorrespondentAccount nostro = nostros.stream()
+                                .filter(n -> n.getCurrency().equalsIgnoreCase(targetCurrency))
+                                .findFirst()
+                                .orElse(nostros.get(0));
+                        BigDecimal convertedAmount = fxService.convert(targetAmount, targetCurrency, nostro.getCurrency());
+                        nostro.setBalance(nostro.getBalance().add(convertedAmount));
+                        correspondentAccountRepository.save(nostro);
+                        log.info("SWIFT Recall: zwrócono na konto Nostro {} ({}) kwotę {} {} (po konwersji z {} {})",
+                                nostro.getAccountNumber(), firstCorrespondentBic, convertedAmount, nostro.getCurrency(), targetAmount, targetCurrency);
+                    } else {
+                        log.warn("Brak aktywnego konta nostro dla korespondenta {}", firstCorrespondentBic);
+                    }
                 }
             }
 
@@ -153,6 +162,12 @@ public class SwiftIncomingService {
             log.info("SWIFT Recall: Pomyślnie zwrócono {} {} na konto {} dla UETR={}",
                     totalRefund, accountCurrency, senderAccount.getAccountNumber().getValue(), parsed.uetr());
 
+            return "ACCEPTED";
+        }
+
+        // Sprawdź czy transakcja o tym UETR została już zaksięgowana (zapobiega duplikatom)
+        if (parsed.uetr() != null && transactionRepository.findByReferenceId(parsed.uetr()).isPresent()) {
+            log.info("SWIFT: Przelew o UETR={} został już wcześniej zaksięgowany. Ignoruję duplikat.", parsed.uetr());
             return "ACCEPTED";
         }
 

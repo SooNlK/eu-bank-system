@@ -1,6 +1,7 @@
 package com.bank.dto.transfer;
 
 import com.bank.domain.transfer.TransferChannel;
+import com.fasterxml.jackson.annotation.JsonAlias;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
@@ -21,7 +22,12 @@ public record TransferRequest(
         @Schema(description = "Tytuł przelewu", example = "Opłata za usługę") String description,
         @Schema(description = "BIC / SWIFT banku odbiorcy (wymagany dla TARGET i SWIFT)", example = "BANKDEXX") String toBic,
         @Schema(description = "Nazwa odbiorcy (dla przelewów zewnętrznych)", example = "Jan Kowalski") String beneficiaryName,
-        @Schema(description = "Podział opłat SWIFT: SHAR=podzielone, DEBT=nadawca, CRED=odbiorca (tylko SWIFT)", example = "SHAR") String chargeBearer,
-        @Schema(description = "Waluta docelowa SWIFT (tylko SWIFT, np. USD, GBP)", example = "EUR") String swiftTargetCurrency
+        @Schema(description = "Podział opłat SWIFT: SHAR=podzielone, DEBT=nadawca, CRED=odbiorca (tylko SWIFT)", example = "SHAR") 
+        @JsonAlias({"chargeBearer", "charge_bearer"})
+        String chargeBearer,
+        @Schema(description = "Waluta docelowa SWIFT (tylko SWIFT, np. USD, GBP)", example = "EUR") 
+        @JsonAlias({"swiftTargetCurrency", "swift_target_currency"})
+        String swiftTargetCurrency
 ) {}
+
 
