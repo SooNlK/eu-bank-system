@@ -88,6 +88,44 @@ System obsługuje dwa typy rachunków zdefiniowane w klasie [AccountType](file:/
 > 3. Rodzic podejmuje decyzję o zatwierdzeniu (`POST /api/transfers/{id}/approve`) lub odrzuceniu (`POST /api/transfers/{id}/reject`) przelewu w [TransferService.java](file:///Users/krzysztof/Desktop/eu-bank-system/backend/src/main/java/com/bank/service/TransferService.java).
 > 4. Zatwierdzenie powoduje natychmiastowe zablokowanie i zaksięgowanie/wysłanie środków. Odrzucenie anuluje transakcję.
 
+##### Diagram Przepływu Autoryzacji Junior (Parent Approval Sequence)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Dziecko as 👤 Dziecko (Junior)
+    actor Rodzic as 👤 Rodzic (Opiekun)
+    participant API as 💻 API (TransferController)
+    participant SVC as ⚙️ TransferService
+    participant DB as 🗄️ Baza danych (PostgreSQL)
+
+    Dziecko->>API: POST /api/transfers (zlecenie przelewu)
+    API->>SVC: execute(request)
+    Note over SVC: Wykrycie konta JUNIOR
+    SVC->>DB: Zapisz Transfer (status=PENDING_APPROVAL, requiresApproval=true)
+    SVC-->>Dziecko: Zwróć dane przelewu (oczekuje na autoryzację)
+    
+    Rodzic->>API: GET /api/transfers/pending-approval
+    API->>SVC: getPendingApprovalsForParent(email)
+    SVC->>DB: Pobierz przelewy PENDING_APPROVAL dla dzieci rodzica
+    SVC-->>Rodzic: Zwróć listę przelewów
+    
+    alt Zatwierdzenie
+        Rodzic->>API: POST /api/transfers/{id}/approve
+        API->>SVC: approve(transferId, email)
+        Note over SVC: Walidacja uprawnień rodzica
+        SVC->>DB: Aktualizacja Transfer (status=PROCESSING, approvedBy, approvedAt)
+        SVC->>SVC: processExternalTransfer / processInternalTransfer
+        SVC->>DB: Zapisz saldo i historię transakcji (status=COMPLETED)
+        SVC-->>Rodzic: Zwróć dane zatwierdzonego przelewu
+    else Odrzucenie
+        Rodzic->>API: POST /api/transfers/{id}/reject
+        API->>SVC: reject(transferId, email)
+        SVC->>DB: Aktualizacja Transfer (status=REJECTED, rejectedAt)
+        SVC-->>Rodzic: Zwróć dane odrzuconego przelewu
+    end
+```
+
 ---
 
 ### 2. Przelewy Krajowe i Europejskie (INTERNAL, SEPA & TARGET2)
@@ -100,6 +138,60 @@ Obsługiwane są kanały płatności zdefiniowane w [TransferChannel](file:///Us
 
 #### Asynchroniczne Rozliczanie i Webhooki:
 Backend udostępnia endpoint webhooka w [TargetWebhookController.java](file:///Users/krzysztof/Desktop/eu-bank-system/backend/src/main/java/com/bank/api/TargetWebhookController.java) (`POST /api/v1/target-settlement`). Służy on do przyjmowania asynchronicznych powiadomień z symulatora płatniczego o statusie realizacji przelewów wychodzących oraz do procesowania przelewów przychodzących z innych banków.
+
+##### A. Przepływ przelewu wychodzącego (Outgoing SEPA & TARGET2 Flow)
+
+Przelew wychodzący do systemu zewnętrznego (SEPA Batch, SEPA Instant lub TARGET2) jest walidowany i budowany jako plik XML ISO 20022 przy użyciu [IsoXmlBuilder.java](file:///Users/krzysztof/Desktop/eu-bank-system/backend/src/main/java/com/bank/client/eupayments/IsoXmlBuilder.java), a następnie przekazywany do symulatora rozliczeń płatniczych.
+
+```mermaid
+flowchart TD
+    U([Użytkownik]) -->|1. POST /api/transfers| CTRL[TransferController]
+    CTRL -->|2. execute| SVC[TransferService]
+    SVC -->|3. executeExternalTransfer| SVC
+    SVC -->|4. Walidacja salda| SVC
+    SVC -->|5. Budowa XML ISO 20022| ISO[IsoXmlBuilder]
+    SVC -->|6. Wybór kanału| CH{Kanał przelewu}
+    
+    CH -->|SEPA| BAT[SepaBatchClient.submitTransfer]
+    CH -->|SEPA_INSTANT / TARGET| INST[SepaInstantClient.submitTransfer]
+    
+    BAT -->|Przesyła plik batch| SIM[Symulator Płatności]
+    INST -->|Przelew w czasie rzeczywistym| SIM
+    
+    SVC -->|7. Obciążenie konta i zapis DEBIT| DB[(Baza danych - ACCOUNTS/TRANSACTIONS)]
+    SVC -->|8. Zapis Transfer| DB2[(Baza danych - TRANSFERS)]
+    
+    Note over BAT,DB2: Dla SEPA (Batch) status to PROCESSING (oczekuje na rozliczenie nettingu).
+    Note over INST,DB2: Dla Instant/TARGET status to COMPLETED od razu.
+```
+
+##### B. Przepływ obsługi webhooka (Incoming & Webhook Netting/Recall Flow)
+
+Symulator płatniczy wysyła asynchroniczne powiadomienia na webhook [TargetWebhookController.java](file:///Users/krzysztof/Desktop/eu-bank-system/backend/src/main/java/com/bank/api/TargetWebhookController.java), informując o rozliczeniu, zwrotach (Recall) lub nettingu sesji SEPA Batch.
+
+```mermaid
+flowchart TD
+    SIM[Symulator Płatności] -->|1. POST /api/v1/target-settlement| WH[TargetWebhookController]
+    WH -->|2. Weryfikacja sygnatury HMAC| HMAC{Zgodna?}
+    HMAC -->|Nie| ERR[401 Unauthorized]
+    
+    HMAC -->|Tak| EVT{Typ zdarzenia i Payload}
+    
+    %% Recall event
+    EVT -->|transfer.recalled| REC{Kto jest u nas?}
+    REC -->|Odbiorca| DB_DEB[Debet konta odbiorcy - processIncomingRecallDebit]
+    REC -->|Nadawca| DB_CRE[Kredyt konta nadawcy - processIncomingRecallCredit]
+    
+    %% Netting event for Batch
+    EVT -->|payment.settled + NETT- ID| NET[Księgowanie kompensaty Batch - completePendingSepaBatchTransfers]
+    NET -->|Mark pending SEPA transfers as COMPLETED| DB[(Baza danych)]
+    
+    %% Standard incoming
+    EVT -->|payment.settled| INC{Czy to do naszego BIC?}
+    INC -->|Nie| ERR2[400 Incorrect BIC]
+    INC -->|Tak| DB_INC[Uznanie konta odbiorcy - processIncomingTransfer]
+    DB_INC -->|Zapis CREDIT| DB
+```
 
 ---
 
@@ -121,6 +213,65 @@ System obsługuje wielowalutowe przelewy międzynarodowe i transgraniczne w kana
     *   **Zatwierdzenie**: Środki są przeliczane po kursie FX i księgowane na rachunku odbiorcy (status `ACCEPTED`).
     *   **Zwrot (Recall)**: Jeżeli konto odbiorcy nie istnieje lub jest nieaktywne, system generuje automatyczny komunikat zwrotny (Recall) i odrzuca transakcję.
 
+#### Przepływy SWIFT (Diagramy Sekwencji/Aktywności)
+
+Poniższe diagramy przedstawiają logiczne przepływy dla transakcji wychodzących oraz przychodzących przez system SWIFT w naszej aplikacji.
+
+##### A. Przepływ przelewu wychodzącego (Outgoing SWIFT Flow)
+
+Wychodzący przelew jest inicjowany przez użytkownika, walidowany w [TransferService.java](file:///Users/krzysztof/Desktop/eu-bank-system/backend/src/main/java/com/bank/service/TransferService.java) i synchronicznie wysyłany do zewnętrznego symulatora SWIFT przez [SwiftClient.java](file:///Users/krzysztof/Desktop/eu-bank-system/backend/src/main/java/com/bank/client/swift/SwiftClient.java). Po otrzymaniu statusu i trasy, system rozlicza środki na odpowiednim koncie Nostro partnera korespondencyjnego.
+
+```mermaid
+flowchart TD
+    U([Użytkownik]) -->|1. POST /api/transfers| CTRL[TransferController]
+    CTRL -->|2. execute| SVC[TransferService]
+    SVC -->|3. executeSwiftTransfer| SVC
+    SVC -->|4. Walidacja odbiorcy i waluty| VAL[validateSwiftTransfer]
+    SVC -->|5. Pobranie kursów FX| FX[FxService.getRate / convert]
+    SVC -->|6. Sprawdzenie salda i obciążenie konta| DB[(Baza danych - ACCOUNTS)]
+    SVC -->|7. Budowa pacs.008 XML| BLD[Pacs008Builder]
+    SVC -->|8. sendMessage| GW[SwiftClient]
+    GW -->|9. Paczka XML pacs.008| SIM[Symulator SWIFT]
+    SIM -->|10. Status + Route| GW
+    GW --> SVC
+    SVC -->|11. Obciążenie konta Nostro korespondenta| DB2[(Baza danych - CORRESPONDENT_ACCOUNTS)]
+    SVC -->|12. Zapis transakcji DEBIT| DB3[(Baza danych - TRANSACTIONS)]
+    SVC -->|13. Zapis statusu COMPLETED/FAILED| DB4[(Baza danych - TRANSFERS)]
+```
+
+##### B. Przepływ przelewu przychodzącego i obsługi Recall (Incoming SWIFT & Recall Flow)
+
+Przychodzące komunikaty XML są odbierane przez webhook w [SwiftWebhookController.java](file:///Users/krzysztof/Desktop/eu-bank-system/backend/src/main/java/com/bank/api/SwiftWebhookController.java), a następnie przetwarzane przez [SwiftIncomingService.java](file:///Users/krzysztof/Desktop/eu-bank-system/backend/src/main/java/com/bank/service/SwiftIncomingService.java). W przypadku braku/nieaktywności konta lub wykrycia zwrotu (Return/Recall), system odpowiednio wycofuje transakcję i przesyła komunikat zwrotny do sieci SWIFT.
+
+```mermaid
+flowchart TD
+    SIM[Symulator SWIFT] -->|1. POST /receive pacs.008 XML| CTRL[SwiftWebhookController]
+    CTRL -->|2. processIncoming| SVC[SwiftIncomingService]
+    SVC -->|3. Parsowanie XML| PRS[Pacs008Parser]
+    SVC -->|4. Sprawdzenie czy to zwrot RETURN| RET{Czy to Return/Recall?}
+    
+    %% Ścieżka dla zwrotu (Return/Recall)
+    RET -->|Tak| DB_REC[(Szukaj oryginalnego transferu)]
+    DB_REC -->|Znaleziono| REF[Zwróć środki nadawcy + Nostro]
+    REF -->|Zapis CREDIT| DB_TX1[(Baza danych - TRANSACTIONS)]
+    REF -->|Aktualizacja statusu na FAILED| DB_TR1[(Baza danych - TRANSFERS)]
+    
+    %% Ścieżka dla standardowego przychodzącego
+    RET -->|Nie| DB_DUP{Czy duplikat UETR?}
+    DB_DUP -->|Tak| ACC_IGN[Zignoruj - odpowiedz ACCEPTED]
+    DB_DUP -->|Nie| DB_ACC[Szukaj konta odbiorcy]
+    
+    DB_ACC -->|Nie istnieje/Nieaktywne| REC_SND[Wysłanie Recall do nadawcy]
+    REC_SND -->|Budowa XML| BLD[Pacs008Builder]
+    BLD -->|sendReturn| GW[SwiftClient]
+    GW -->|Odrzucenie| SIM
+    
+    DB_ACC -->|Istnieje i Aktywne| FX_CONV[Przeliczenie waluty FX]
+    FX_CONV -->|Uznanie konta odbiorcy| DB_BAL[(Baza danych - ACCOUNTS)]
+    DB_BAL -->|Zapis transakcji CREDIT| DB_TX2[(Baza danych - TRANSACTIONS)]
+    DB_TX2 -->|Odpowiedz ACCEPTED| SIM
+```
+
 ---
 
 ### 4. Obsługa Kart Płatniczych (System Wydawniczy / Issuer)
@@ -137,13 +288,125 @@ Backend banku działa jako Issuer (Wydawca) zintegrowany z symulatorem sieci kar
     *   `POST /api/v1/capture`: Rozliczenie zablokowanej kwoty i ostateczne obciążenie rachunku.
     *   `POST /api/v1/refund`: Zwrot środków na rachunek karty.
 
+##### Diagram Przepływu Płatności Kartą (Card Issuer Authorization & Capture)
+
+Rozliczenie płatności przebiega dwuetapowo (najpierw autoryzacja i blokada środków w [CardIssuerService.java](file:///Users/krzysztof/Desktop/eu-bank-system/backend/src/main/java/com/bank/service/CardIssuerService.java), a następnie pobranie środków za pomocą operacji Capture), lub jednoetapowo (Direct Capture) dla transakcji offline.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor POS as 🛒 Terminal POS / Merchant
+    participant NET as 🌐 Sieć Kartowa (Simulator)
+    participant API as 💻 API (CardIssuerController)
+    participant SVC as ⚙️ CardIssuerService
+    participant DB as 🗄️ Baza danych (PostgreSQL)
+
+    Note over POS,NET: Krok 1: Autoryzacja i Blokada środków (Standard Flow)
+    POS->>NET: Płatność kartą
+    NET->>API: POST /api/v1/authorize
+    API->>SVC: authorize(request)
+    SVC->>DB: Sprawdź konto i pobierz saldo (ACCOUNTS)
+    Note over SVC: Przeliczenie FX (jeśli inna waluta)
+    alt Brak środków / Konto zablokowane
+        SVC-->>API: Zwróć DECLINED
+        API-->>NET: 200 OK (status: DECLINED)
+        NET-->>POS: Transakcja odrzucona
+    else Zatwierdzona
+        SVC->>DB: Zwiększ reserved_balance (blokada środków)
+        SVC->>DB: Zapisz transakcję DEBIT (status PENDING)
+        SVC-->>API: Zwróć APPROVED (authorizationCode)
+        API-->>NET: 200 OK (status: APPROVED, authorizationCode)
+        NET-->>POS: Transakcja zaakceptowana
+    end
+
+    Note over POS,NET: Krok 2: Rozliczenie autoryzacji (Capture Flow)
+    NET->>API: POST /api/v1/capture (z podaniem authCode)
+    API->>SVC: capture(request)
+    SVC->>DB: Pobierz transakcję PENDING wg authCode
+    SVC->>DB: balance -= amount, reserved_balance -= amount
+    SVC->>DB: Zmień status transakcji na COMPLETED
+    SVC-->>API: Zwróć SETTLED
+    API-->>NET: 200 OK (status: SETTLED)
+```
+
 ---
 
-### 5. Płatności BLIK
+### 5. Płatności BLIK (System Mobilny KLIK)
 
-Wygodne płatności mobilne zintegrowane w [BlikController.java](file:///Users/krzysztof/Desktop/eu-bank-system/backend/src/main/java/com/bank/api/BlikController.java):
-*   Generowanie 6-cyfrowego kodu BLIK zapisanego w postaci skrótu (hash) w tabeli `BLIK_CODES`.
+Wygodne płatności mobilne zintegrowane w [BlikController.java](file:///Users/krzysztof/Desktop/eu-bank-system/backend/src/main/java/com/bank/api/BlikController.java) za pośrednictwem akademickiej sieci KLIK (klon systemu BLIK):
+*   Generowanie 6-cyfrowego kodu BLIK/KLIK zapisanego w postaci skrótu (hash SHA-256) w tabeli `BLIK_CODES`.
 *   Kod zachowuje ważność przez 120 sekund i może być użyty jednorazowo.
+*   Rejestracja i wyrejestrowanie aliasów numerów telefonów w celu realizacji przelewów P2P.
+
+##### A. Przepływ płatności kodem C2B (KLIK C2B Payment Flow)
+
+Proces płatności kodem KLIK w sklepie wymaga pobrania kodu przez klienta, zainicjowania transakcji przez terminal/sprzedawcę, odebrania webhooka autoryzacji z KLIK przez [KlikWebhookController.java](file:///Users/krzysztof/Desktop/eu-bank-system/backend/src/main/java/com/bank/api/KlikWebhookController.java) oraz ostatecznego potwierdzenia transakcji przez użytkownika w aplikacji banku.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Klient as 📱 Klient (Aplikacja banku)
+    actor Kasjer as 🛒 Kasjer / Sklep
+    participant KLIK as 🌐 System KLIK (Simulator)
+    participant API as 💻 Nasz API (BlikController)
+    participant SVC as ⚙️ KlikService
+    participant DB as 🗄️ Baza danych (PostgreSQL)
+
+    %% Generowanie kodu
+    Klient->>API: POST /api/blik/generate
+    API->>SVC: generateCode(request)
+    SVC->>KLIK: Wygeneruj kod (KlikClient)
+    KLIK-->>SVC: Zwróć 6-cyfrowy kod i expiry (120s)
+    SVC->>DB: Zapisz zahashowany kod w BLIK_CODES
+    SVC-->>Klient: Zwróć kod (np. "123456")
+
+    %% Płatność w sklepie
+    Klient->>Kasjer: Podaje kod "123456"
+    Kasjer->>KLIK: Przesyła kod płatności
+    KLIK->>API: Webhook: POST /api/v1/klik/authorize
+    API->>SVC: authorizeWebhook(request)
+    SVC->>DB: Zapisz KlikTransaction (status=PENDING)
+    SVC-->>KLIK: 200 OK (received=true, will_prompt_user=true)
+    
+    %% Potwierdzenie przez użytkownika
+    Klient->>API: GET /api/blik/pending
+    API-->>Klient: Zwraca transakcję PENDING (kwota, sklep)
+    Klient->>API: POST /api/blik/confirm (status=ACCEPTED/REJECTED)
+    API->>SVC: confirmTransaction(id, status)
+    
+    alt Zatwierdzono (ACCEPTED)
+        SVC->>DB: Zarezerwuj środki (reserved_balance += amount)
+        SVC->>KLIK: confirmPayment(ACCEPTED)
+        KLIK-->>SVC: Zwróć status COMPLETED
+        SVC->>DB: balance -= amount, reserved_balance -= amount
+        SVC->>DB: Ustaw KlikTransaction na COMPLETED
+        SVC->>DB: Zapisz transakcję DEBIT w historii
+        KLIK-->>Kasjer: Transakcja zakończona sukcesem
+    else Odrzucono (REJECTED)
+        SVC->>KLIK: confirmPayment(REJECTED)
+        SVC->>DB: Ustaw KlikTransaction na REJECTED
+        KLIK-->>Kasjer: Transakcja odrzucona
+    end
+```
+
+##### B. Przepływ przelewu na telefon P2P (KLIK P2P Transfer Flow)
+
+Zlecenie przelewu na numer telefonu w [KlikService.java](file:///Users/krzysztof/Desktop/eu-bank-system/backend/src/main/java/com/bank/service/KlikService.java) najpierw wyszukuje IBAN odbiorcy w systemie KLIK, po czym w zależności od przynależności rachunku wykonuje przelew wewnętrzny (INTERNAL) lub zewnętrzny przelew natychmiastowy (SEPA Instant).
+
+```mermaid
+flowchart TD
+    U([Użytkownik]) -->|1. POST /api/blik/p2p/transfer| CTRL[BlikController]
+    CTRL -->|2. p2pTransfer| SVC[KlikService]
+    SVC -->|3. Lookup aliasu w KLIK| KL[KlikClient.lookupAlias]
+    KL -->|Zwraca IBAN odbiorcy| SVC
+    SVC -->|4. Czy IBAN należy do naszego banku?| OWN{Czy nasz bank?}
+    
+    OWN -->|Tak| INT[Wewnętrzny przelew natychmiastowy]
+    INT -->|TransferChannel.INTERNAL| TS[TransferService.execute]
+    
+    OWN -->|Nie| EXT[Zewnętrzny przelew SEPA Instant]
+    EXT -->|TransferChannel.SEPA_INSTANT| TS
+```
 
 ---
 
