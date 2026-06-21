@@ -160,10 +160,9 @@ flowchart TD
     
     SVC -->|7. Obciążenie konta i zapis DEBIT| DB[(Baza danych - ACCOUNTS/TRANSACTIONS)]
     SVC -->|8. Zapis Transfer| DB2[(Baza danych - TRANSFERS)]
-    
-    Note over BAT,DB2: Dla SEPA (Batch) status to PROCESSING (oczekuje na rozliczenie nettingu).
-    Note over INST,DB2: Dla Instant/TARGET status to COMPLETED od razu.
 ```
+
+*Uwaga: Dla kanału SEPA (Batch) transfer otrzymuje początkowo status `PROCESSING` (oczekuje na rozliczenie nettingu sesji). Dla kanałów SEPA Instant oraz TARGET2 status jest ustawiany na `COMPLETED` natychmiast.*
 
 ##### B. Przepływ obsługi webhooka (Incoming & Webhook Netting/Recall Flow)
 
