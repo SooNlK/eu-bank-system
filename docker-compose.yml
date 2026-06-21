@@ -43,12 +43,17 @@ services:
       SWIFT_BANK_BIC: ${SWIFT_BANK_BIC:-BANKDEXX}
       SWIFT_ENABLED: ${SWIFT_ENABLED:-true}
       SWIFT_FEE_PERCENT: ${SWIFT_FEE_PERCENT:-0.01}
+      KLIK_URL: ${KLIK_URL:-http://host.docker.internal:8000}
+      KLIK_API_KEY: ${KLIK_API_KEY:-klik_mock_api_key_for_c2b}
+      KLIK_BANK_API_KEY: ${KLIK_BANK_API_KEY:-klik_mock_api_key_for_p2p}
+      KLIK_ZONE: ${KLIK_ZONE:-EU}
     depends_on:
       db:
         condition: service_healthy
     networks:
       - default
       - eu-payments-units_payment_network
+      - klik_payments_net
 
   frontend:
     build:
@@ -67,14 +72,19 @@ services:
     depends_on:
       - backend
     networks:
-      - default
-      - cards-backend
+      default: {}
+      clearing-eu-a-karty:
+        aliases:
+          - euro-bank-a
 
 networks:
-  cards-backend:
-    name: cards-backend
+  clearing-eu-a-karty:
+    name: clearing-eu-a-karty
     external: true
   eu-payments-units_payment_network:
+    external: true
+  klik_payments_net:
+    name: klik-payments_klik_net
     external: true
 
 volumes:

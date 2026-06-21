@@ -5,6 +5,7 @@ import DashboardPanel from './DashboardPanel'
 import TransfersPanel from './TransfersPanel'
 import JuniorPanel from './JuniorPanel'
 import CardsPanel from './CardsPanel'
+import KlikPanel from './KlikPanel'
 import { getMyAccounts, getPendingApprovals } from '../services/account'
 
 const TRANSFER_NAV_IDS = ['sepa', 'instant', 'target', 'internal', 'swift', 'transfers']
@@ -84,6 +85,10 @@ export default function Dashboard({ userEmail, onLogout }) {
 
         if (activeNav === 'cards') {
             return <CardsPanel />
+        }
+
+        if (activeNav === 'klik') {
+            return <KlikPanel userEmail={userEmail} />
         }
 
         if (TRANSFER_NAV_IDS.includes(activeNav)) {
