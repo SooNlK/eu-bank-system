@@ -291,8 +291,7 @@ public class TransferService {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.BAD_REQUEST, "Rachunek odbiorcy nie istnieje w tym banku"));
 
-        boolean requiresApproval = (request.amount().compareTo(APPROVAL_LIMIT) > 0) ||
-                                   (fromAccount.getType() == com.bank.domain.account.AccountType.JUNIOR);
+        boolean requiresApproval = (fromAccount.getType() == com.bank.domain.account.AccountType.JUNIOR);
 
         Transfer transfer = Transfer.builder()
                 .fromAccount(fromAccount)
@@ -331,8 +330,7 @@ public class TransferService {
     ) {
         validateExternalTransfer(fromAccount, request);
 
-        boolean requiresApproval = (request.amount().compareTo(APPROVAL_LIMIT) > 0) ||
-                                   (fromAccount.getType() == com.bank.domain.account.AccountType.JUNIOR);
+        boolean requiresApproval = (fromAccount.getType() == com.bank.domain.account.AccountType.JUNIOR);
 
         Transfer transfer = Transfer.builder()
                 .fromAccount(fromAccount)
