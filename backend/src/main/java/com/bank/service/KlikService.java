@@ -378,12 +378,30 @@ public class KlikService {
                 LocalDate.now(),
                 channel,
                 request.description() != null ? request.description() : "Przelew na telefon KLIK",
-                null, // toBic
+                resolveBic(lookup.bankCode()), // toBic
                 "Odbiorca KLIK P2P",
                 null,
                 null
         );
 
         return transferService.execute(transferRequest, customerEmail);
+    }
+
+    private String resolveBic(String bankCode) {
+        if (bankCode == null) {
+            return "";
+        }
+        String trimmed = bankCode.trim();
+        // If it's already a valid BIC, return it
+        if (trimmed.length() >= 8 && trimmed.length() <= 11 && !trimmed.contains(" ") && trimmed.equals(trimmed.toUpperCase())) {
+            return trimmed;
+        }
+        if (trimmed.equalsIgnoreCase("Deutsche Bank")) {
+            return "DEBKDE01XXX";
+        }
+        if (trimmed.equalsIgnoreCase("Deutsche Bank 2") || trimmed.equalsIgnoreCase("Bank Niemiecki")) {
+            return "DEBKDE02XXX";
+        }
+        return trimmed;
     }
 }

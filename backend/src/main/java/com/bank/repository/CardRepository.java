@@ -14,6 +14,8 @@ public interface CardRepository extends JpaRepository<Card, UUID> {
 
     Optional<Card> findByExternalCardToken(String externalCardToken);
 
+    List<Card> findByAccountId(UUID accountId);
+
     @Query("""
             select c from Card c
             join fetch c.account a

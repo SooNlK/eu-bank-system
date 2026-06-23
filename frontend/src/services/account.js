@@ -274,3 +274,18 @@ export async function fetchSensitiveCardDetails(cardId) {
     return response.json()
 }
 
+export async function topUpCard(cardId, sourceAccountId, amount) {
+    const response = await fetch(`/api/cards/${cardId}/topup`, {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify({
+            sourceAccountId,
+            amount: Number(amount)
+        })
+    })
+    if (!response.ok) {
+        throw new Error(await readError(response))
+    }
+    return response.json()
+}
+

@@ -12,6 +12,9 @@ import com.bank.dto.cardnetwork.IssuerCaptureRequest;
 import com.bank.dto.cardnetwork.IssuerRefundRequest;
 import com.bank.dto.cardnetwork.IssuerStatusResponse;
 import com.bank.domain.card.Card;
+import com.bank.domain.card.CardType;
+import com.bank.client.cardnetwork.CardNetworkClient;
+import com.bank.client.cardnetwork.CardNetworkCardResponse;
 import com.bank.repository.AccountRepository;
 import com.bank.repository.CardRepository;
 import com.bank.repository.TransactionRepository;
@@ -36,17 +39,20 @@ public class CardIssuerService {
     private final CardRepository cardRepository;
     private final FxService fxService;
     private final TransactionService transactionService;
+    private final CardNetworkClient cardNetworkClient;
 
     public CardIssuerService(AccountRepository accountRepository,
                              TransactionRepository transactionRepository,
                              CardRepository cardRepository,
                              FxService fxService,
-                             TransactionService transactionService) {
+                             TransactionService transactionService,
+                             CardNetworkClient cardNetworkClient) {
         this.accountRepository = accountRepository;
         this.transactionRepository = transactionRepository;
         this.cardRepository = cardRepository;
         this.fxService = fxService;
         this.transactionService = transactionService;
+        this.cardNetworkClient = cardNetworkClient;
     }
 
     @Transactional
@@ -75,13 +81,55 @@ public class CardIssuerService {
             return declined("CURRENCY_MISMATCH");
         }
 
+        Card prepaidCard = cardRepository.findByAccountId(account.getId()).stream()
+                .filter(c -> c.getType() == CardType.PREPAID)
+                .findFirst()
+                .orElse(null);
+
+        String authorizationCode = "AUTH-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        Money amount = Money.of(convertedAmountVal, accountCurrency);
+
+        if (prepaidCard != null) {
+            CardNetworkCardResponse cardResp;
+            try {
+                cardResp = cardNetworkClient.getCard(prepaidCard.getExternalCardToken());
+            } catch (Exception e) {
+                return declined("CARD_NETWORK_UNAVAILABLE");
+            }
+            if (cardResp == null) {
+                return declined("CARD_NOT_FOUND");
+            }
+            if (!"ACTIVE".equals(cardResp.status())) {
+                return declined("CARD_NOT_ACTIVE");
+            }
+
+            BigDecimal available = BigDecimal.valueOf(cardResp.balance());
+            if (available.compareTo(convertedAmountVal) < 0) {
+                return declined("INSUFFICIENT_FUNDS");
+            }
+
+            String txDesc = "Autoryzacja płatności kartą prepaid";
+            if (!accountCurrency.equals(currency)) {
+                txDesc += " (" + request.amount() + " " + currency + ")";
+            }
+
+            transactionRepository.save(Transaction.builder()
+                    .account(account)
+                    .card(prepaidCard)
+                    .amount(amount)
+                    .type(TransactionType.DEBIT)
+                    .status(TransactionStatus.PENDING)
+                    .description(cardDescription(txDesc, request.merchantName()))
+                    .referenceId(authReference(authorizationCode))
+                    .build());
+
+            return new IssuerAuthorizationResponse(authorizationCode, "APPROVED", null);
+        }
+
         BigDecimal available = account.getBalance().getAmount().subtract(account.getReservedBalance().getAmount());
         if (available.compareTo(convertedAmountVal) < 0) {
             return declined("INSUFFICIENT_FUNDS");
         }
-
-        String authorizationCode = "AUTH-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-        Money amount = Money.of(convertedAmountVal, accountCurrency);
 
         account.setReservedBalance(account.getReservedBalance().add(amount));
         accountRepository.save(account);
@@ -118,6 +166,12 @@ public class CardIssuerService {
 
             Account account = transaction.getAccount();
             Money amount = transaction.getAmount();
+
+            if (transaction.getCard() != null && transaction.getCard().getType() == CardType.PREPAID) {
+                transaction.setStatus(TransactionStatus.COMPLETED);
+                transactionRepository.save(transaction);
+                return new IssuerStatusResponse("SETTLED");
+            }
 
             if (account.getReservedBalance().getAmount().compareTo(amount.getAmount()) < 0) {
                 transaction.setStatus(TransactionStatus.FAILED);
@@ -185,6 +239,20 @@ public class CardIssuerService {
                 }
             }
 
+            if (card.getType() == CardType.PREPAID) {
+                transactionRepository.save(Transaction.builder()
+                        .account(account)
+                        .card(card)
+                        .amount(amount)
+                        .type(TransactionType.DEBIT)
+                        .status(TransactionStatus.COMPLETED)
+                        .description(cardDescription("Rozliczenie płatności kartą prepaid (POS)", request.merchantId()))
+                        .referenceId(authReference(request.authorizationCode()))
+                        .build());
+
+                return new IssuerStatusResponse("SETTLED");
+            }
+
             BigDecimal available = account.getBalance().getAmount().subtract(account.getReservedBalance().getAmount());
             if (available.compareTo(convertedAmountVal) < 0) {
                 transactionService.saveFailedTransaction(account.getId(), card.getId(), amount, "Rozliczenie płatności kartą (POS) - ODRZUCONA (Brak środków)", request.merchantId(), request.authorizationCode(), request.amount(), currency);
@@ -223,7 +291,27 @@ public class CardIssuerService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Waluta zwrotu musi być zgodna z walutą rachunku.");
         }
 
+        Card prepaidCard = cardRepository.findByAccountId(account.getId()).stream()
+                .filter(c -> c.getType() == CardType.PREPAID)
+                .findFirst()
+                .orElse(null);
+
         Money amount = Money.of(request.amount(), currency);
+
+        if (prepaidCard != null) {
+            transactionRepository.save(Transaction.builder()
+                    .account(account)
+                    .card(prepaidCard)
+                    .amount(amount)
+                    .type(TransactionType.CREDIT)
+                    .status(TransactionStatus.COMPLETED)
+                    .description("Zwrot płatności kartą prepaid")
+                    .referenceId(CARD_REFUND_PREFIX + request.originalTransactionId())
+                    .build());
+
+            return new IssuerStatusResponse("REFUNDED");
+        }
+
         account.setBalance(account.getBalance().add(amount));
         accountRepository.save(account);
 

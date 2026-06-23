@@ -3,6 +3,7 @@ package com.bank.api;
 import com.bank.dto.card.CardResponse;
 import com.bank.dto.card.IssueCardRequest;
 import com.bank.dto.card.IssueCardResponse;
+import com.bank.dto.card.TopUpCardRequest;
 import com.bank.service.CardService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -137,6 +138,29 @@ public class CardController {
                 cardId,
                 limits.get("dailyLimit"),
                 limits.get("monthlyLimit"),
+                authentication.getName()
+        ));
+    }
+
+    @PostMapping("/{cardId}/topup")
+    @Operation(summary = "Doładowanie karty prepaid",
+            description = "Pobiera środki z wybranego rachunku i doładowuje saldo karty prepaid w sieci kartowej.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Karta doładowana",
+                    content = @Content(schema = @Schema(implementation = CardResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Nieprawidłowe żądanie lub brak środków", content = @Content),
+            @ApiResponse(responseCode = "404", description = "Karta lub rachunek nie istnieje", content = @Content),
+            @ApiResponse(responseCode = "401", description = "Brak autoryzacji", content = @Content)
+    })
+    public ResponseEntity<CardResponse> topUpCard(
+            @Parameter(description = "UUID karty") @PathVariable UUID cardId,
+            @Valid @RequestBody TopUpCardRequest request,
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok(cardService.topUp(
+                cardId,
+                request.sourceAccountId(),
+                request.amount(),
                 authentication.getName()
         ));
     }

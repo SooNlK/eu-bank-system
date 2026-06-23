@@ -17,6 +17,11 @@ import com.bank.dto.card.IssueCardRequest;
 import com.bank.dto.card.IssueCardResponse;
 import com.bank.repository.CardRepository;
 import com.bank.repository.CustomerRepository;
+import com.bank.repository.AccountRepository;
+import com.bank.repository.TransactionRepository;
+import com.bank.domain.transaction.Transaction;
+import com.bank.domain.transaction.TransactionStatus;
+import com.bank.domain.transaction.TransactionType;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,15 +44,21 @@ public class CardService {
     private final CustomerRepository customerRepository;
     private final AccountService accountService;
     private final CardNetworkClient cardNetworkClient;
+    private final AccountRepository accountRepository;
+    private final TransactionRepository transactionRepository;
 
     public CardService(CardRepository cardRepository,
                        CustomerRepository customerRepository,
                        AccountService accountService,
-                       CardNetworkClient cardNetworkClient) {
+                       CardNetworkClient cardNetworkClient,
+                       AccountRepository accountRepository,
+                       TransactionRepository transactionRepository) {
         this.cardRepository = cardRepository;
         this.customerRepository = customerRepository;
         this.accountService = accountService;
         this.cardNetworkClient = cardNetworkClient;
+        this.accountRepository = accountRepository;
+        this.transactionRepository = transactionRepository;
     }
 
     @Transactional
@@ -85,6 +96,16 @@ public class CardService {
         }
 
         BigDecimal initialBalance = request.initialBalance() == null ? BigDecimal.ZERO : request.initialBalance();
+        String currency = account.getBalance().getCurrency();
+
+        if (request.cardType() == CardType.PREPAID && initialBalance.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal available = account.getBalance().getAmount().subtract(account.getReservedBalance().getAmount());
+            if (available.compareTo(initialBalance) < 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Brak wystarczających środków na rachunku do zasilenia nowej karty prepaid.");
+            }
+            account.setBalance(account.getBalance().subtract(Money.of(initialBalance, currency)));
+            accountRepository.save(account);
+        }
 
         CardNetworkIssueResponse networkResponse;
         try {
@@ -103,7 +124,6 @@ public class CardService {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Moduł kart jest niedostępny: " + ex.getMessage());
         }
 
-        String currency = account.getBalance().getCurrency();
         Card card = cardRepository.save(Card.builder()
                 .account(account)
                 .externalCardToken(networkResponse.cardToken())
@@ -115,6 +135,17 @@ public class CardService {
                 .dailyLimit(Money.of(valueOrDefault(request.dailyLimit(), DEFAULT_DAILY_LIMIT), currency))
                 .monthlyLimit(Money.of(valueOrDefault(request.monthlyLimit(), DEFAULT_MONTHLY_LIMIT), currency))
                 .build());
+
+        if (request.cardType() == CardType.PREPAID && initialBalance.compareTo(BigDecimal.ZERO) > 0) {
+            transactionRepository.save(Transaction.builder()
+                    .account(account)
+                    .card(card)
+                    .amount(Money.of(initialBalance, currency))
+                    .type(TransactionType.DEBIT)
+                    .status(TransactionStatus.COMPLETED)
+                    .description("Zasilenie początkowe nowej karty prepaid " + card.getLast4())
+                    .build());
+        }
 
         return new IssueCardResponse(
                 mapToResponse(card),
@@ -216,6 +247,49 @@ public class CardService {
         } catch (Exception ex) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Nie można pobrać pełnych danych z sieci kartowej: " + ex.getMessage());
         }
+    }
+
+    @Transactional
+    public CardResponse topUp(UUID cardId, UUID sourceAccountId, BigDecimal amount, String email) {
+        Card card = getAccessibleCard(cardId, email);
+
+        if (card.getType() != CardType.PREPAID) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tylko karty prepaid mogą być doładowywane.");
+        }
+        if (card.getStatus() != CardStatus.ACTIVE) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Karta musi być aktywna, aby ją doładować.");
+        }
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Kwota doładowania musi być dodatnia.");
+        }
+
+        Account sourceAccount = accountService.getAccountEntity(sourceAccountId, email);
+        if (sourceAccount.getStatus() != com.bank.domain.account.AccountStatus.ACTIVE) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Rachunek źródłowy jest nieaktywny.");
+        }
+
+        String currency = sourceAccount.getBalance().getCurrency();
+        BigDecimal available = sourceAccount.getBalance().getAmount().subtract(sourceAccount.getReservedBalance().getAmount());
+        if (available.compareTo(amount) < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Brak wystarczających środków na rachunku źródłowym.");
+        }
+
+        Money moneyAmount = Money.of(amount, currency);
+        sourceAccount.setBalance(sourceAccount.getBalance().subtract(moneyAmount));
+        accountRepository.save(sourceAccount);
+
+        callCardNetwork(() -> cardNetworkClient.topUpCard(card.getExternalCardToken(), amount, currency));
+
+        transactionRepository.save(Transaction.builder()
+                .account(sourceAccount)
+                .amount(moneyAmount)
+                .type(TransactionType.DEBIT)
+                .status(TransactionStatus.COMPLETED)
+                .description("Doładowanie karty prepaid " + card.getLast4())
+                .build());
+
+        syncStatusFromCardNetwork(card);
+        return mapToResponse(card);
     }
 
     private Card getAccessibleCard(UUID cardId, String email) {

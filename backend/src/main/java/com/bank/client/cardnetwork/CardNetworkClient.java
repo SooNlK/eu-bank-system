@@ -84,6 +84,24 @@ public class CardNetworkClient {
                 .body(CardNetworkStatusResponse.class);
     }
 
+    public CardNetworkStatusResponse topUpCard(String cardToken, BigDecimal amount, String currency) {
+        Map<String, Object> body = new TreeMap<>();
+        body.put("amount", amount.doubleValue());
+        body.put("currency", currency);
+
+        SignedBody signedBody = sign(body);
+
+        return restClient.post()
+                .uri("/api/v1/cards/{token}/topup", cardToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .header("X-API-Key", apiKey)
+                .header("X-Signature", signedBody.signature())
+                .header("X-Timestamp", signedBody.timestamp())
+                .body(signedBody.jsonBody())
+                .retrieve()
+                .body(CardNetworkStatusResponse.class);
+    }
+
     public CardNetworkCardResponse getCard(String cardToken) {
         return restClient.get()
                 .uri("/api/v1/cards/{token}", cardToken)

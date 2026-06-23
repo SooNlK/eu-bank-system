@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { activateCard, blockCard, getCards, getMyAccounts, getJuniorAccounts, issueCard, unblockCard, updateCardLimits, fetchSensitiveCardDetails } from '../services/account'
+import { activateCard, blockCard, getCards, getMyAccounts, getJuniorAccounts, issueCard, unblockCard, updateCardLimits, fetchSensitiveCardDetails, topUpCard } from '../services/account'
 
 const CARD_TYPES = [
     { value: 'VIRTUAL', label: 'Wirtualna' },
@@ -203,6 +203,18 @@ export default function CardsPanel() {
             await updateCardLimits(cardId, dailyLimit, monthlyLimit)
             await loadData()
             setMessage({ type: 'success', text: 'Limity karty zostały pomyślnie zaktualizowane.' })
+        } catch (error) {
+            setMessage({ type: 'error', text: error.message })
+            throw error
+        }
+    }
+
+    async function handleTopUp(cardId, sourceAccountId, amount) {
+        setMessage(null)
+        try {
+            await topUpCard(cardId, sourceAccountId, amount)
+            await loadData()
+            setMessage({ type: 'success', text: 'Karta prepaid została pomyślnie doładowana.' })
         } catch (error) {
             setMessage({ type: 'error', text: error.message })
             throw error
@@ -426,6 +438,7 @@ export default function CardsPanel() {
                                 onUnblock={() => runCardAction(unblockCard, selectedCard.id)}
                                 accounts={accounts}
                                 onUpdateLimits={handleUpdateLimits}
+                                onTopUp={handleTopUp}
                                 isJuniorUser={isJuniorUser}
                             />
                         )}
@@ -523,13 +536,17 @@ function getCardCredentials(card, sensitiveCard) {
     }
 }
 
-function CardDetailsPanel({ card, sensitiveCard, onActivate, onBlock, onUnblock, accounts, onUpdateLimits, isJuniorUser }) {
+function CardDetailsPanel({ card, sensitiveCard, onActivate, onBlock, onUnblock, accounts, onUpdateLimits, onTopUp, isJuniorUser }) {
     const [flipped, setFlipped] = useState(false)
     const [isEditingLimits, setIsEditingLimits] = useState(false)
     const [editDaily, setEditDaily] = useState(card.dailyLimit || '')
     const [editMonthly, setEditMonthly] = useState(card.monthlyLimit || '')
     const [saving, setSaving] = useState(false)
     const [copied, setCopied] = useState(false)
+
+    const [topUpAccountId, setTopUpAccountId] = useState('')
+    const [topUpAmount, setTopUpAmount] = useState('')
+    const [submittingTopUp, setSubmittingTopUp] = useState(false)
 
     function handleCopy(text) {
         navigator.clipboard.writeText(text)
@@ -541,7 +558,13 @@ function CardDetailsPanel({ card, sensitiveCard, onActivate, onBlock, onUnblock,
         setEditDaily(card.dailyLimit || '')
         setEditMonthly(card.monthlyLimit || '')
         setIsEditingLimits(false)
-    }, [card])
+
+        const standardAccounts = accounts.filter(a => a.type === 'STANDARD')
+        if (standardAccounts.length > 0) {
+            setTopUpAccountId(standardAccounts[0].id)
+        }
+        setTopUpAmount('')
+    }, [card, accounts])
 
     async function handleSaveLimits() {
         setSaving(true)
@@ -552,6 +575,19 @@ function CardDetailsPanel({ card, sensitiveCard, onActivate, onBlock, onUnblock,
             // Keep form open
         } finally {
             setSaving(false)
+        }
+    }
+
+    async function handleTopUpSubmit() {
+        if (!topUpAccountId || !topUpAmount || Number(topUpAmount) <= 0) return
+        setSubmittingTopUp(true)
+        try {
+            await onTopUp(card.id, topUpAccountId, topUpAmount)
+            setTopUpAmount('')
+        } catch (error) {
+            // Keep input values on error
+        } finally {
+            setSubmittingTopUp(false)
         }
     }
 
@@ -718,6 +754,47 @@ function CardDetailsPanel({ card, sensitiveCard, onActivate, onBlock, onUnblock,
                             <span className="text-[10px] text-emerald-700 uppercase tracking-wider font-semibold block">Środki na karcie</span>
                             <span className="text-[20px] font-bold text-emerald-950 block mt-1">{formatEur(card.balance)}</span>
                         </div>
+                        {!isJuniorUser && card.status === 'ACTIVE' && (
+                            <div className="mt-2 p-3 bg-slate-50 border border-slate-200 rounded-xl flex flex-col gap-3">
+                                <span className="text-[11px] font-bold text-slate-800 block">Zasilenie karty prepaid</span>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <label className="flex flex-col gap-1">
+                                        <span className="text-[9px] font-medium text-slate-500 uppercase tracking-wider">Konto źródłowe</span>
+                                        <select
+                                            value={topUpAccountId}
+                                            onChange={e => setTopUpAccountId(e.target.value)}
+                                            className="h-8 rounded-lg border border-slate-200 px-2 text-[12px] bg-white font-semibold text-slate-800"
+                                        >
+                                            {accounts.filter(a => a.type === 'STANDARD').map(acc => (
+                                                <option key={acc.id} value={acc.id}>
+                                                    {acc.ownerName || acc.accountNumber} ({formatEur(acc.balance)})
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </label>
+                                    <label className="flex flex-col gap-1">
+                                        <span className="text-[9px] font-medium text-slate-500 uppercase tracking-wider">Kwota</span>
+                                        <input 
+                                            type="number" 
+                                            min="0.01"
+                                            step="0.01"
+                                            value={topUpAmount}
+                                            onChange={e => setTopUpAmount(e.target.value)}
+                                            className="h-8 rounded-lg border border-slate-200 px-2 text-[12px] bg-white font-semibold text-slate-800"
+                                            placeholder="0.00"
+                                        />
+                                    </label>
+                                </div>
+                                <button
+                                    type="button"
+                                    disabled={submittingTopUp || !topUpAmount || Number(topUpAmount) <= 0}
+                                    onClick={handleTopUpSubmit}
+                                    className="h-8 rounded-lg border-none bg-[#10b981] hover:bg-[#059669] text-[11px] font-semibold text-white cursor-pointer disabled:opacity-50 transition-colors self-end px-4 mt-1"
+                                >
+                                    {submittingTopUp ? 'Zasilanie...' : 'Doładuj kartę'}
+                                </button>
+                            </div>
+                        )}
                     </div>
                 ) : !isEditingLimits ? (
                     <div className="flex flex-col gap-2">

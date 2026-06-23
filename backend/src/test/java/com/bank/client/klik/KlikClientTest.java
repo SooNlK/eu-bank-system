@@ -42,7 +42,7 @@ class KlikClientTest {
 
         this.server.expect(requestTo("http://localhost:8000/api/v1/codes/generate"))
                 .andExpect(method(HttpMethod.POST))
-                .andExpect(header("X-KLIK-Api-Key", "klik_mock_api_key_for_c2b"))
+                .andExpect(header("X-KLIK-Bank-Api-Key", "klik_mock_api_key_for_p2p"))
                 .andExpect(header("Idempotency-Key", org.hamcrest.Matchers.notNullValue()))
                 .andExpect(content().json("{\"user_id\":\"client-123\",\"zone\":\"EU\"}"))
                 .andRespond(withSuccess(mockResponse, MediaType.APPLICATION_JSON));
@@ -67,7 +67,7 @@ class KlikClientTest {
 
         this.server.expect(requestTo("http://localhost:8000/api/v1/payments/confirm"))
                 .andExpect(method(HttpMethod.POST))
-                .andExpect(header("X-KLIK-Api-Key", "klik_mock_api_key_for_c2b"))
+                .andExpect(header("X-KLIK-Bank-Api-Key", "klik_mock_api_key_for_p2p"))
                 .andExpect(header("Idempotency-Key", org.hamcrest.Matchers.notNullValue()))
                 .andExpect(content().json("{\"transaction_id\":\"tx-123\",\"status\":\"ACCEPTED\"}"))
                 .andRespond(withSuccess(mockResponse, MediaType.APPLICATION_JSON));

@@ -225,7 +225,8 @@ class KlikServiceTest {
                 tr.toIban().equals("PL999") &&
                 tr.amount().equals(amount) &&
                 tr.channel() == TransferChannel.SEPA_INSTANT &&
-                tr.description().equals("For lunch")
+                tr.description().equals("For lunch") &&
+                "code-2".equals(tr.toBic())
         ), eq(email));
     }
 }
